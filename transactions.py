@@ -1,6 +1,7 @@
 from prettyprint import warn, fail, success, info
 from datetime import datetime
 from functools import singledispatch
+from blocks import CBTx
 import random
 import ecdsa
 import hashlib
@@ -104,6 +105,7 @@ def hash_info(Tx): #Compiles the unalterable information about the Tx in a strin
             info += "]\n"
             return info
         except Exception as e:
+            raise e
             warn(f"[Hash Info] Couldn't get the info for {Tx}: {e}")
             return False
 @hash_info.register(TxO)
@@ -111,17 +113,26 @@ def _(TxO):
     try:
         return f"nonce: {TxO.nonce}||sndr: {TxO.sndr.to_string().hex()}||rcvr: {TxO.rcvr.to_string().hex()}||amt: {TxO.amt} DSC"
     except Exception as e:
+            raise e
             warn(f"[Hash Info] Couldn't get the info for {TxO}: {e}")
             return False
-
+@hash_info.register(CBTx)
+def _(CBTx):
+    try:
+        return f"nonce: {CBTx.nonce}||type: {CBTx.type}||rcvr: {CBTx.rcvr.to_string().hex()}||amt: {CBTx.amt} DSC"
+    except Exception as e:
+        raise e
+        warn(f"[Hash Info] Couldn't get the info for {CBTx}: {e}")
+        return None
 
 #Verifies the key of any hash and signature (generally reserved for Tx's and Blocks)
 def verify_signature(pk, hash, signature):
     try:
         pk.verify(signature, hash.encode())
         return True
-    except:
-        warn(f"[Signature Verification] {hash[:10]}...: Signature could not be verified!")
+    except Exception as e:
+        raise e
+        warn(f"[Signature Verification] {hash[:10]}...: Signature could not be verified: {e}!")
         return False
 
 #A general Tx verification tool that is trusted by blocks and blockchain
@@ -132,21 +143,27 @@ def verify_Tx(Tx):
             warn(f"[Tx Verification] {Tx} has malformed hash (was tampered with or wasn't signed properly)!")
             return False
         
-        #1.2- Check if all the TxO's are not lying about their hashes. Also get the total output amt
+        #1.2- Check if all the TxO's are not lying about their hashes. Also get the total output amt and check against what block specifies
         TxO_total = 0
         for TxO in Tx.outputs:
             if TxO.hash != hashlib.sha256(hash_info(TxO).encode()).hexdigest():
                 warn(f"[Tx Verification] Output {TxO} in {Tx} has incorrect hash or was tampered with!")
                 return False
             TxO_total += TxO.amt
+        if TxO_total != Tx.outputs_amt:
+            warn(f"[Tx Verification] {Tx} has specified incorrect output total: Actual- {TxO_total} DSC, Specified- {Tx.outputs_amt} DSC")
+            return False
 
-        #1.3- Check if all the TxI's are not lying about their hashes. Also get the total input amt
+        #1.3- Check if all the TxI's are not lying about their hashes. Also get the total input amt and check against what block specifies
         TxI_total = 0
         for TxI in Tx.inputs:
             if TxI.hash != hashlib.sha256(hash_info(TxI).encode()).hexdigest():
                 warn(f"[Tx Verification] Input {TxI} in {Tx} has incorrect hash or was tampered with!")
                 return False
             TxI_total += TxI.amt
+        if TxI_total != Tx.inputs_amt:
+            warn(f"[Tx Verification] {Tx} has specified incorrect input total: Actual- {TxI_total} DSC, Specified- {Tx.inputs_amt} DSC")
+            return False
 
         #2.1- Get the transaction fee if any
         Tx_fee = 0
@@ -165,6 +182,7 @@ def verify_Tx(Tx):
         
         return True
     except Exception as e:
+        raise e
         warn(f"[Tx Verification] {Tx} encountered an error during verification: {e}!")
         return False
 

@@ -1,0 +1,13 @@
+1- Add CoinBase maturity: miner rewards can only be used after 10 blocks or more are appended to that block
+
+2- Create user client, integrate transaction creation into UI, and implement client UTxO fetching
+
+3- Create a miner client with block mining UI, and implement local mempool
+
+4- Display copy of blockchain through a visual GUI in clients
+
+5- Create node client with mempool and blockchain copy.
+
+6- Connect user clients, miner clients with nodes: node mempool updates local miner mempools, node blockchain updates clients' copies
+
+7- Create a chain verification tool that scans and verifies entire specified segment of chain.

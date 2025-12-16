@@ -30,14 +30,15 @@ class CBTx():
 
 
 class Block():
-    def __init__(self, previous_block, miner_pk, miner_reward=64, Tx_limit=5, difficulty=3, name="unnamed_block"):
+    def __init__(self, previous_hash, miner_pk, miner_reward=64, Tx_limit=5, difficulty=3, name="unnamed_block"):
         #Nonce
         self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
         self.name = name
 
         #Positional Details
         self.height = 0              #The height of the block in the blockchain (set by blockchain)
-        self.prev = previous_block   #The target this block will attach to (usually the surface block of the chain)
+        self.prevh = previous_hash   #The hash of the target this block will attach to (usually the surface block of the chain)
+        self.prev = None             #The actual target obj. Not set prior to being accepted by blockchain to avoid deep copies during pickling (set by blockchain)
         self.next = []               #The blocks attached to this block (set by blockchain)
         
         #Mining Details
@@ -67,7 +68,7 @@ class Block():
                 return self.add_CBTx(Tx)
 
             #Check if this Tx is already in block
-            for dscvr_Tx in block.Tx_list:
+            for dscvr_Tx in self.Tx_list:
                 if Tx == dscvr_Tx:
                     fail(f"[{self}] {Tx} not added: Tx already exists in block!")
                     return False
@@ -87,10 +88,11 @@ class Block():
                 fail(f"[{self}] {Tx} not added: Max Tx Limit Reached")
                 return False
 
-            block.Tx_list.append(Tx)
+            self.Tx_list.append(Tx)
             success(f"[{self}] added {Tx} with Tx Fee: {remainder}")
             return True
         except Exception as e:
+            raise e
             fail(f"[{self}] {Tx} not added: Encountered an Error: {e}")
             return False
         
@@ -102,6 +104,7 @@ class Block():
             fail(f"[{self}] {CBTx} not added: Invalid type!")
             return False
         except Exception as e:
+            raise e
             fail(f"[{self}] {CBTx} not added: Encountered an Error: {e}")
             return False
 
@@ -111,30 +114,20 @@ class Block():
             return True
         return False
     
-    def mine_block(self):
+    def mine(self):
         self.add_CBTx(CBTx(self.miner, self.mine_reward, type="reward"))
         while not self.isMined():
             self.mine_seq += 1
         self.hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
         return self.hash
 
-def verify_block_hash(block, difficulty):
-    true_hash = hashlib.sha256(block.info().encode()).hexdigest()
-    stated_hash = block.hash
-    if true_hash != stated_hash:
-        warn(f"[Block Hash Verification] {block} was modified or hashed incorrectly!")
-        return False
-    if int(true_hash, 16) > int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',16)/16**(difficulty):
-        warn(f"[Block Hash Verification] {block} not mined to required difficulty!")
-        return False
-    return True
 
 #This function is independent of the Block and CBTx classes to prevent a malicious clone class from tampering with it
 #This ensures that the hashes of the provided class objects can be independently verified
 @singledispatch
 def hash_info(block):
     try:
-        info = f"[{block.nonce}]||prev: {block.prev.hash if block.prev else "None"}||miner: {block.miner.to_string().hex()}||mine_seq: {block.mine_seq}||\nTx's: ["
+        info = f"[{block.nonce}]||prev: {block.prevh}||miner: {block.miner.to_string().hex()}||mine_seq: {block.mine_seq}||\nTx's: ["
         for Tx in block.Tx_list:
             info += f"({Tx.hash}|Tx_fee: {Tx.Tx_fee.hash if Tx.Tx_fee else "None"}), "
         info += f"]\nCBTx's: ["
@@ -143,15 +136,51 @@ def hash_info(block):
         info += "]\n"
         return info
     except Exception as e:
+        raise e
         warn(f"[Hash Info] Couldn't get the info for {block}: {e}")
-        return False
+        return None
 @hash_info.register(CBTx)
 def _(CBTx):
     try:
         return f"nonce: {CBTx.nonce}||type: {CBTx.type}||rcvr: {CBTx.rcvr.to_string().hex()}||amt: {CBTx.amt} DSC"
     except Exception as e:
+        raise e
         warn(f"[Hash Info] Couldn't get the info for {CBTx}: {e}")
-        return False
+        return None
+    
+#A general Block verification tool that is trusted by the blockchain (Verifies everything except UTxO validity)
+def verify_block(block, difficulty, miner_reward):
+    try:#Malicious or invalid classes may throw errors
+        #1.1- Check if the Block is lying about its hash
+        if block.hash != hashlib.sha256(hash_info(block).encode()).hexdigest():
+                warn(f"[Block Verification] {block} has malformed hash (wasn't mined properly or was tampered)!")
+                return False
+        
+        #1.2- Verify every Tx in block (Verifies hashes, output/input balance & signature)
+        for Tx in block.Tx_list:
+            if not transactions.verify_Tx(Tx):
+                warn(f"[Block Verification] {block} has invalid Tx: {Tx}!")
+                return False
+            
+        #2.1- Check block is mined to specified difficulty
+        if not (int(block.hash, 16) <= int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',16)/16**(difficulty)):
+            warn(f"[Block Verification] {block} not mined to difficulty: {difficulty}!")
+            return False
+        
+        #2.2- Check if miner reward is under specified amt
+        reward_total = 0
+        for CBTx in block.CBTx_list:
+            if CBTx.type == "reward":
+                reward_total += CBTx.amt
+        if reward_total > miner_reward:
+            warn(f"[Block Verification] {block} has awarded higher miner reward than allowed: Limit- {reward_total}, Awarded- {miner_reward}!")
+            return False
+        return True
+    
+    except Exception as e:
+            raise e
+            warn(f"[Block Verification] {block} encountered an error during verification: {e}!")
+            return False
 
 if __name__ == "__main__":
     sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)
