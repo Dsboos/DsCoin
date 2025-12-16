@@ -1,10 +1,11 @@
-from prettyprint import warn, fail, success, info
+from dsc.utils.prettyprint import warn, fail, success, info
+from dsc.blockchain.transactions import TxO, Tx
+from dsc.blockchain.blocks import Block, CBTx, verify_block
 from datetime import datetime
 import sqlite3
 import pickle
-import transactions
-import blocks
 import ecdsa
+import random
 
 #Rule Number One: Always use hashes to reference blocks. Only use objs when details within blocks are required
 class BlockChain():
@@ -63,7 +64,8 @@ class BlockChain():
         self.conn.commit()
 
     def save_snapshot(self):
-        snapshot_name = "snapshot_" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        nonce = f"{datetime.now().strftime("%H$%M$%S_%d$%m$%y")}_{random.randint(100000, 999999)}"
+        snapshot_name = "snapshot_" + nonce
         self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {snapshot_name} (
                             o_hash TEXT PRIMARY KEY,
                             tx_hash TEXT,
@@ -81,7 +83,7 @@ class BlockChain():
     def process_block(self, block):
         #A) Verifications
         #1.1- Verify Block (everything except UTxO validity)
-        if not blocks.verify_block(block, self.difficulty, self.mine_reward):
+        if not verify_block(block, self.difficulty, self.mine_reward):
             fail(f"[BlockChain] {block} couldn't be verified!")
             return False
         
@@ -220,7 +222,7 @@ class BlockChain():
         self.cursor.execute("DELETE FROM UTxOs WHERE tx_hash = ?", (Tx.hash,))
         #Add all TxIs back to UTxOs table
         for TxI in Tx.inputs:
-            self.add_UTxO(TxI, (Tx if isinstance(TxI, transactions.TxO) else None), block)
+            self.add_UTxO(TxI, (Tx if isinstance(TxI, TxO) else None), block)
 
     def add_Tx(self, Tx, block, confirmed=True): #Confirmed is true for main chain additions, false for forks
         #1.1- Add Tx fees (if any) to TxOs table, and to UTxOs table if main chain
@@ -289,17 +291,17 @@ if __name__ == "__main__":
     sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)
     pk = sk.get_verifying_key()
 
-    root = blocks.Block(None, pk, name="root")
+    root = Block(None, pk, name="root")
     root.mine()
-    txo1 = blocks.CBTx(pk, 150, type="addition")
+    txo1 = CBTx(pk, 150, type="addition")
     root.add_CBTx(txo1)
 
     chain = BlockChain(root)
 
     #Try adding invalid block 
-    b1_invalid = blocks.Block(root.hash, pk, name="b1_invalid")
-    tx_invalid1 = transactions.Tx(pk, name="invalid1")      #Client side verifications are turned off for this test. 
-    txi1 = transactions.TxO(pk, pk, 50, name="pk_pk_50")    #The blockchain does the verification now.
+    b1_invalid = Block(root.hash, pk, name="b1_invalid")
+    tx_invalid1 = Tx(pk, name="invalid1")      #Client side verifications are turned off for this test. 
+    txi1 = TxO(pk, pk, 50, name="pk_pk_50")    #The blockchain does the verification now.
     tx_invalid1.add_input(txi1)
     tx_invalid1.create_output(pk, 60, name="pk_pk_60")
     tx_invalid1.sign(sk)
@@ -309,8 +311,8 @@ if __name__ == "__main__":
     chain.process_block(b1_invalid)                         #Should be rejected
 
     #Add valid block b1 now
-    b1 = blocks.Block(root.hash, pk, name="b1")
-    tx1 = transactions.Tx(pk, name="tx1")
+    b1 = Block(root.hash, pk, name="b1")
+    tx1 = Tx(pk, name="tx1")
     tx1.add_input(txo1)
     tx1.create_output(pk, 30, name="pk_pk_30")
     tx1.sign(sk)
@@ -320,8 +322,8 @@ if __name__ == "__main__":
     chain.process_block(b1)
     
     #Make fork block a1
-    a1 = blocks.Block(root.hash, pk, name="a1")
-    tx2 = transactions.Tx(pk, name="tx2")
+    a1 = Block(root.hash, pk, name="a1")
+    tx2 = Tx(pk, name="tx2")
     tx2.add_input(txo1)
     txo2 = tx2.create_output(pk, 67, name="pk_pk_67")
     tx2.sign(sk)
@@ -331,8 +333,8 @@ if __name__ == "__main__":
     chain.process_block(a1)
 
     #Make fork longer than main chain by adding another block a2
-    a2 = blocks.Block(a1.hash, pk, name="a2")
-    tx2 = transactions.Tx(pk, name="tx2")
+    a2 = Block(a1.hash, pk, name="a2")
+    tx2 = Tx(pk, name="tx2")
     tx2.add_input(txo2)
     tx2.create_output(pk, 30, name="pk_pk_30")
     tx2.sign(sk)
@@ -352,8 +354,8 @@ if __name__ == "__main__":
     main_blocks = []
 
     for i in range(2, 5):
-        bi = blocks.Block(prev.hash, pk, name=f"b{i}")
-        tx = transactions.Tx(pk, name=f"tx_main_{i}")
+        bi = Block(prev.hash, pk, name=f"b{i}")
+        tx = Tx(pk, name=f"tx_main_{i}")
         tx.add_input(spendable)
         spendable = tx.create_output(pk, 25 - i, name=f"pk_pk_{25 - i}")
         tx.sign(sk)
@@ -371,8 +373,8 @@ if __name__ == "__main__":
     fork_base = main_blocks[0]  # b2
 
     # --- Fork block f1 (VALID spend) ---
-    f1 = blocks.Block(fork_base.hash, pk, name="f1_valid")
-    txf1 = transactions.Tx(pk, name="tx_f1_valid")
+    f1 = Block(fork_base.hash, pk, name="f1_valid")
+    txf1 = Tx(pk, name="tx_f1_valid")
     txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])  # spend b2 output
     f1_out = txf1.create_output(pk, 10, name="pk_pk_10")
     txf1.sign(sk)
@@ -382,8 +384,8 @@ if __name__ == "__main__":
     chain.process_block(f1)
 
     # --- Fork block f2 (DOUBLE SPEND) ---
-    f2 = blocks.Block(f1.hash, pk, name="f2_double_spend")
-    txf2 = transactions.Tx(pk, name="tx_f2_double_spend")
+    f2 = Block(f1.hash, pk, name="f2_double_spend")
+    txf2 = Tx(pk, name="tx_f2_double_spend")
     txf2.add_input(main_blocks[0].Tx_list[0].outputs[0])  # same input again
     txf2.create_output(pk, 5, name="pk_pk_5")
     txf2.sign(sk)
@@ -393,9 +395,9 @@ if __name__ == "__main__":
     chain.process_block(f2)      # SHOULD FAIL
 
     # --- Fork block f3 (FAKE INPUT) ---
-    f3 = blocks.Block(f1.hash, pk, name="f3_fake_utxo")
-    txf3 = transactions.Tx(pk, name="tx_f3_fake")
-    fake_utxo = transactions.TxO(pk, pk, 999, name="FAKE_UTXO")
+    f3 = Block(f1.hash, pk, name="f3_fake_utxo")
+    txf3 = Tx(pk, name="tx_f3_fake")
+    fake_utxo = TxO(pk, pk, 999, name="FAKE_UTXO")
     txf3.add_input(fake_utxo)
     txf3.create_output(pk, 1, name="pk_pk_1")
     txf3.sign(sk)
@@ -407,8 +409,8 @@ if __name__ == "__main__":
     print("\n========== FORK OVERTAKES MAIN CHAIN ==========\n")
 
     # --- Valid fork extension to trigger reorg ---
-    f2_valid = blocks.Block(f1.hash, pk, name="f2_valid")
-    txf2v = transactions.Tx(pk, name="tx_f2_valid")
+    f2_valid = Block(f1.hash, pk, name="f2_valid")
+    txf2v = Tx(pk, name="tx_f2_valid")
     txf2v.add_input(f1_out)
     f2v_out = txf2v.create_output(pk, 6, name="pk_pk_6")
     txf2v.sign(sk)
@@ -417,8 +419,8 @@ if __name__ == "__main__":
     f2_valid.mine()
     chain.process_block(f2_valid)
 
-    f3_valid = blocks.Block(f2_valid.hash, pk, name="f3_valid")
-    txf3v = transactions.Tx(pk, name="tx_f3_valid")
+    f3_valid = Block(f2_valid.hash, pk, name="f3_valid")
+    txf3v = Tx(pk, name="tx_f3_valid")
     txf3v.add_input(f2v_out)
     txf3v.create_output(pk, 3, name="pk_pk_3")
     txf3v.sign(sk)
@@ -441,9 +443,9 @@ if __name__ == "__main__":
 
     live_utxo = pickle.loads(row[0])
     # Spend a valid UTxO but create NO outputs, only fee
-    fee_block = blocks.Block(base.hash, pk, name="fee_only_block")
+    fee_block = Block(base.hash, pk, name="fee_only_block")
 
-    tx_fee_only = transactions.Tx(pk, name="tx_fee_only")
+    tx_fee_only = Tx(pk, name="tx_fee_only")
     tx_fee_only.add_input(live_utxo)     # spend last known good UTxO
     tx_fee_only.sign(sk)                 # no outputs => everything becomes fee
 
@@ -452,9 +454,9 @@ if __name__ == "__main__":
     chain.process_block(fee_block)
 
     # Try to double-spend the SAME input in another fee-only fork block
-    fee_fork = blocks.Block(fee_block.hash, pk, name="fee_only_double_spend")
+    fee_fork = Block(fee_block.hash, pk, name="fee_only_double_spend")
 
-    tx_fee_ds = transactions.Tx(pk, name="tx_fee_double_spend")
+    tx_fee_ds = Tx(pk, name="tx_fee_double_spend")
     tx_fee_ds.add_input(live_utxo)       # same input again
     tx_fee_ds.sign(sk)
 
@@ -474,8 +476,8 @@ if __name__ == "__main__":
     utxo = spendable
 
     for i in range(2):
-        b = blocks.Block(prev.hash, pk, name=f"post_snap_{i}")
-        tx = transactions.Tx(pk, name=f"tx_post_snap_{i}")
+        b = Block(prev.hash, pk, name=f"post_snap_{i}")
+        tx = Tx(pk, name=f"tx_post_snap_{i}")
         tx.add_input(utxo)
         utxo = tx.create_output(pk, utxo.amt - 1, name=f"pk_pk_ps_{i}")
         tx.sign(sk)
@@ -488,8 +490,8 @@ if __name__ == "__main__":
     # Create fork that starts BEFORE snapshot
     fork_origin = main_blocks[0]   # well before snapshot
 
-    f1 = blocks.Block(fork_origin.hash, pk, name="deep_fork_1")
-    txf1 = transactions.Tx(pk, name="tx_deep_1")
+    f1 = Block(fork_origin.hash, pk, name="deep_fork_1")
+    txf1 = Tx(pk, name="tx_deep_1")
     txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])
     f1_out = txf1.create_output(pk, 5, name="pk_pk_5")
     txf1.sign(sk)
@@ -498,8 +500,8 @@ if __name__ == "__main__":
     f1.mine()
     chain.process_block(f1)
 
-    f2 = blocks.Block(f1.hash, pk, name="deep_fork_2")
-    txf2 = transactions.Tx(pk, name="tx_deep_2")
+    f2 = Block(f1.hash, pk, name="deep_fork_2")
+    txf2 = Tx(pk, name="tx_deep_2")
     txf2.add_input(f1_out)
     txf2.create_output(pk, 3, name="pk_pk_3")
     txf2.sign(sk)
@@ -508,6 +510,6 @@ if __name__ == "__main__":
     f2.mine()
     chain.process_block(f2)
 
-    f3 = blocks.Block(f2.hash, pk, name="deep_fork_3")
+    f3 = Block(f2.hash, pk, name="deep_fork_3")
     f3.mine()
     chain.process_block(f3)    # SHOULD TRIGGER REORG ACROSS SNAPSHOT

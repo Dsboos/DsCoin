@@ -1,7 +1,8 @@
-from prettyprint import warn, fail, success, info
+from dsc.utils.prettyprint import warn, fail, success, info
+from dsc.blockchain.transactions import TxO, Tx, verify_Tx
+from dsc.blockchain.hashinfo import hash_info
 from datetime import datetime
 from functools import singledispatch
-import transactions
 import hashlib
 import random
 import ecdsa
@@ -79,7 +80,7 @@ class Block():
                 Tx.Tx_fee = CBTx(self.miner, remainder, type="fee")
 
             #Verify the Tx
-            if not transactions.verify_Tx(Tx):
+            if not verify_Tx(Tx):
                 fail(f"[{self}] {Tx} not added: Verification failed!")
                 return False
 
@@ -92,7 +93,7 @@ class Block():
             success(f"[{self}] added {Tx} with Tx Fee: {remainder}")
             return True
         except Exception as e:
-            raise e
+            
             fail(f"[{self}] {Tx} not added: Encountered an Error: {e}")
             return False
         
@@ -104,7 +105,7 @@ class Block():
             fail(f"[{self}] {CBTx} not added: Invalid type!")
             return False
         except Exception as e:
-            raise e
+            
             fail(f"[{self}] {CBTx} not added: Encountered an Error: {e}")
             return False
 
@@ -124,8 +125,8 @@ class Block():
 
 #This function is independent of the Block and CBTx classes to prevent a malicious clone class from tampering with it
 #This ensures that the hashes of the provided class objects can be independently verified
-@singledispatch
-def hash_info(block):
+@hash_info.register(Block)
+def _(block):
     try:
         info = f"[{block.nonce}]||prev: {block.prevh}||miner: {block.miner.to_string().hex()}||mine_seq: {block.mine_seq}||\nTx's: ["
         for Tx in block.Tx_list:
@@ -136,7 +137,7 @@ def hash_info(block):
         info += "]\n"
         return info
     except Exception as e:
-        raise e
+        
         warn(f"[Hash Info] Couldn't get the info for {block}: {e}")
         return None
 @hash_info.register(CBTx)
@@ -144,7 +145,7 @@ def _(CBTx):
     try:
         return f"nonce: {CBTx.nonce}||type: {CBTx.type}||rcvr: {CBTx.rcvr.to_string().hex()}||amt: {CBTx.amt} DSC"
     except Exception as e:
-        raise e
+        
         warn(f"[Hash Info] Couldn't get the info for {CBTx}: {e}")
         return None
     
@@ -158,7 +159,7 @@ def verify_block(block, difficulty, miner_reward):
         
         #1.2- Verify every Tx in block (Verifies hashes, output/input balance & signature)
         for Tx in block.Tx_list:
-            if not transactions.verify_Tx(Tx):
+            if not verify_Tx(Tx):
                 warn(f"[Block Verification] {block} has invalid Tx: {Tx}!")
                 return False
             
@@ -178,7 +179,7 @@ def verify_block(block, difficulty, miner_reward):
         return True
     
     except Exception as e:
-            raise e
+            
             warn(f"[Block Verification] {block} encountered an error during verification: {e}!")
             return False
 
@@ -191,8 +192,8 @@ if __name__ == "__main__":
     block.add_CBTx(txo1)
 
     
-    tx_invalid1 = transactions.Tx(pk, name="invalid1")
-    txi1 = transactions.TxO(pk, pk, 50, name="pk_pk_50")
+    tx_invalid1 = Tx(pk, name="invalid1")
+    txi1 = TxO(pk, pk, 50, name="pk_pk_50")
     tx_invalid1.add_input(txi1)
     tx_invalid1.create_output(pk, 60, name="pk_pk_60")
 
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     print(tx_invalid1.sign(sk))
     block.add_Tx(tx_invalid1)
 
-    tx = transactions.Tx(pk, name="tx1")
+    tx = Tx(pk, name="tx1")
     tx.add_input(txi1)
     tx.create_output(pk, 30, name="pk_pk_30")
     

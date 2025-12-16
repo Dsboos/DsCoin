@@ -1,0 +1,9 @@
+[project]
+name = "dsc"
+version = "0.1.0"
+description = "A cryptocoin implementation called DsCoin"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

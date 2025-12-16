@@ -1,7 +1,7 @@
-from prettyprint import warn, fail, success, info
+from dsc.utils.prettyprint import warn, fail, success, info
+from dsc.blockchain.hashinfo import hash_info
 from datetime import datetime
 from functools import singledispatch
-from blocks import CBTx
 import random
 import ecdsa
 import hashlib
@@ -93,8 +93,8 @@ class Tx():
 
 #This function is independent of the Tx and TxO classes to prevent a malicious clone class from tampering with it
 #This ensures that the hashes and/or signature of the provided class objects can be independently verified
-@singledispatch
-def hash_info(Tx): #Compiles the unalterable information about the Tx in a string for hashing
+@hash_info.register(Tx)
+def _(Tx): #Compiles the unalterable information about the Tx in a string for hashing
         try:    #Sometimes malicious or classes with invalid details may throw an error
             info = f"[{Tx.nonce}]\nSender: {Tx.sndr.to_string().hex()}\nInputs: ["
             for TxI in Tx.inputs:
@@ -105,7 +105,7 @@ def hash_info(Tx): #Compiles the unalterable information about the Tx in a strin
             info += "]\n"
             return info
         except Exception as e:
-            raise e
+
             warn(f"[Hash Info] Couldn't get the info for {Tx}: {e}")
             return False
 @hash_info.register(TxO)
@@ -113,25 +113,16 @@ def _(TxO):
     try:
         return f"nonce: {TxO.nonce}||sndr: {TxO.sndr.to_string().hex()}||rcvr: {TxO.rcvr.to_string().hex()}||amt: {TxO.amt} DSC"
     except Exception as e:
-            raise e
+
             warn(f"[Hash Info] Couldn't get the info for {TxO}: {e}")
             return False
-@hash_info.register(CBTx)
-def _(CBTx):
-    try:
-        return f"nonce: {CBTx.nonce}||type: {CBTx.type}||rcvr: {CBTx.rcvr.to_string().hex()}||amt: {CBTx.amt} DSC"
-    except Exception as e:
-        raise e
-        warn(f"[Hash Info] Couldn't get the info for {CBTx}: {e}")
-        return None
-
+    
 #Verifies the key of any hash and signature (generally reserved for Tx's and Blocks)
 def verify_signature(pk, hash, signature):
     try:
         pk.verify(signature, hash.encode())
         return True
     except Exception as e:
-        raise e
         warn(f"[Signature Verification] {hash[:10]}...: Signature could not be verified: {e}!")
         return False
 
@@ -182,7 +173,6 @@ def verify_Tx(Tx):
         
         return True
     except Exception as e:
-        raise e
         warn(f"[Tx Verification] {Tx} encountered an error during verification: {e}!")
         return False
 
