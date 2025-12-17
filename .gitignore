@@ -429,16 +429,12 @@ FodyWeavers.xsd
 
 #Added by me:
 
-# =====================
 # Build / packaging
-# =====================
 build/
 dist/
 *.egg-info/
 
-# =====================
 # SQLite databases
-# =====================
 *.db
 *.sqlite
 *.sqlite3

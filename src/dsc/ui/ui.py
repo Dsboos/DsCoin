@@ -2,9 +2,9 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QPlainT
 QLineEdit, QPushButton, QTableWidget, QHBoxLayout, QLayout,
 QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
 QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
-QMessageBox, QDoubleSpinBox)
-from PySide6.QtCore import Qt, QLocale
-from PySide6.QtGui import QDoubleValidator
+QMessageBox, QDoubleSpinBox, QStyle)
+from PySide6.QtCore import Qt, QLocale, QSize
+from PySide6.QtGui import QDoubleValidator, QIcon
 
 class DsCoinUI(QWidget):
     def __init__(self):
@@ -17,7 +17,8 @@ class DsCoinUI(QWidget):
         self.output_tx_label = QLabel("Output Transactions")
         self.output_tx_label.setStyleSheet(styleSheets.header2)
 
-        self.del_all_btn = QPushButton("Delete All")
+        self.del_all_btn = QPushButton(QIcon.fromTheme("edit-delete"), " Delete All")
+        self.del_all_btn.setMinimumWidth(100)
         self.del_all_btn.setStyleSheet(styleSheets.bad_btn)
         self.del_all_btn.setMaximumWidth(100)
         self.del_tx_btn = QPushButton("Delete")
@@ -26,8 +27,8 @@ class DsCoinUI(QWidget):
 
         self.output_tx_list = QTableWidget()
         self.output_tx_list.setColumnCount(4)
-        self.output_tx_list.setHorizontalHeaderLabels(["Tx Name", "Reciever Address", "Tx Hash", "Amount"])
-        self.output_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.output_tx_list.setHorizontalHeaderLabels(["Name", "Reciever Address", "Hash", "Amount (DSC)"])
+        self.output_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
@@ -37,6 +38,7 @@ class DsCoinUI(QWidget):
         self.create_tx_label.setStyleSheet(styleSheets.header3)
 
         self.tx_name_field = QLineEdit(placeholderText="Enter Name")
+        self.tx_name_field.setMaxLength(18) 
         self.tx_name_field.setFixedWidth(180)
         self.pk2_field = QPlainTextEdit(placeholderText="Enter Public Key")
         self.pk2_field.setMaximumHeight(50)
@@ -61,14 +63,15 @@ class DsCoinUI(QWidget):
 
         self.select_all_btn = QPushButton("Select All")
         self.select_all_btn.setMaximumWidth(100)
+        self.refresh_btn = QPushButton()
+        self.refresh_btn.setIcon(QIcon.fromTheme("system-reboot"))
 
         self.input_tx_list = QTableWidget()
         self.input_tx_list.setColumnCount(4)
-        self.input_tx_list.setHorizontalHeaderLabels(["Date", "Sender Address", "Amount", "Select"])
-        self.input_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.input_tx_list.setHorizontalHeaderLabels(["Hash", "Sender Address", "Amount (DSC)", "Select"])
+        self.input_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.input_tx_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.input_tx_list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
@@ -79,8 +82,9 @@ class DsCoinUI(QWidget):
         self.remainder_label = QLabel("---")
         self.remainder_label.setStyleSheet("font-weight: bold;")
 
-        self.sign_btn = QPushButton("Sign Transaction")
+        self.sign_btn = QPushButton(QIcon("src\\dsc\\ui\\assets\\icons\\key.png"), " Sign Transaction")
         self.sign_btn.setStyleSheet(styleSheets.big_btn + styleSheets.good_btn)
+        self.sign_btn.setIconSize(QSize(20, 20))
         
         self.initUI()
 
@@ -148,6 +152,7 @@ class DsCoinUI(QWidget):
         header3.addWidget(self.input_tx_label)
         header3.addStretch()
         header3.addWidget(self.select_all_btn)
+        header3.addWidget(self.refresh_btn)
 
         tx_layout_container2.addLayout(header3)
         tx_layout_container2.addWidget(self.input_tx_list)
