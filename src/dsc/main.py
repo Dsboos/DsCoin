@@ -41,7 +41,7 @@ class DsCoinClient(DsCoinUI):
         #Application variables
 
     def initDatabase(self):
-        connection = sqlite3.connect("src/data/client.db")
+        connection = sqlite3.connect("data/client.db")
         cursor = connection.cursor()
         cursor.execute("""CREATE TABLE IF NOT EXISTS outputs (
                     name TEXT, 
@@ -73,7 +73,7 @@ class DsCoinClient(DsCoinUI):
             #Give default name if unnamed
             name = self.tx_name_field.text()
             if not name:
-                name = "unnamed_Tx"
+                name = "unnamed_TxO"
 
             #Check recipient key validity
             pk2 = convert_key(self.pk2_field.toPlainText(), "pk")
@@ -162,6 +162,8 @@ class DsCoinClient(DsCoinUI):
             row += 1 
 
     def refresh_input_list(self):
+        self.cursor.execute("ATTACH DATABASE ? AS bc", ("data/blockchain.db",))
+        
         pass
 
     def read_input_list(self):
@@ -174,7 +176,7 @@ class DsCoinClient(DsCoinUI):
         if self.input_tx_list.item(0, 3).checkState() == Qt.CheckState.Checked:
             print("Checked")
         else:
-            print("Unchecked")
+            print("Unchecked")        
 
     def display_error(self, msg=None):
         if not msg:

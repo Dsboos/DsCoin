@@ -12,7 +12,7 @@ class BlockChain():
     def __init__(self, root_block, mine_reward=64, Tx_limit = 5, difficulty=3, name="unnamed_blockchain"):
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
-        self.conn = sqlite3.Connection("blockchain.db")
+        self.conn = sqlite3.Connection("data/blockchain.db")
         self.cursor = self.conn.cursor()
         self.init_db()  #Initialize the blockchain database
 
@@ -62,6 +62,12 @@ class BlockChain():
                             surface TEXT
                             )""")
         self.conn.commit()
+
+    def refresh_db(self):
+        if self.conn:
+            self.conn.close()
+        self.conn = sqlite3.Connection("data/blockchain.db")
+        self.cursor = self.conn.cursor()
 
     def save_snapshot(self):
         nonce = f"{datetime.now().strftime("%H$%M$%S_%d$%m$%y")}_{random.randint(100000, 999999)}"
@@ -214,8 +220,8 @@ class BlockChain():
     
     def del_Tx(self, Tx, block):
         #Set all TxOs to unconfirmed
-        for TxO in Tx.outputs:
-            self.set_TxO(TxO, False)
+        for TXO in Tx.outputs:
+            self.set_TxO(TXO, False)
         if Tx.Tx_fee:
             self.set_TxO(Tx.Tx_fee, False)
         #Remove TxOs (and Tx_fee CBTxOs) from UTxOs table
@@ -267,7 +273,7 @@ class BlockChain():
 
         curr_blockh = self.surface.hash  #Now set current block to surface and travel back to common anscestor
         query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
-        while curr_blockh != comm_blockh:   #Loop over till common block is reached, set blocks main_chain to false otw
+        while curr_blockh != comm_blockh:#Loop over till common block is reached, set blocks main_chain to false otw
             self.cursor.execute("UPDATE blocks SET main_chain = ? WHERE hash = ?", (False, curr_blockh))
             old_path.append(pickle.loads(query[1]))
             curr_blockh = query[0]
