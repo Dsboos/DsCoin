@@ -163,7 +163,7 @@ class DsCoinClient(DsCoinUI):
 
     def refresh_input_list(self):
         self.cursor.execute("ATTACH DATABASE ? AS bc", ("data/blockchain.db",))
-        
+
         pass
 
     def read_input_list(self):
@@ -185,16 +185,7 @@ class DsCoinClient(DsCoinUI):
         self.error_label.setText(msg)
 
 
-def convert_key(key, type):
-    try:
-        if type=="pk":
-            return ecdsa.VerifyingKey.from_string(bytes.fromhex(key), curve=ecdsa.SECP256k1)
-        if type=="sk":
-            return ecdsa.SigningKey.from_string(bytes.fromhex(key), curve=ecdsa.SECP256k1)
-        return key
-    except:
-        warn("[Key Converter] pk or sk is invalid!")
-        return False
+
 
 
 if __name__ == "__main__":
