@@ -196,14 +196,14 @@ class BlockChain():
             return True
 
     def add_block(self, block, main_chain=True):
-        if main_chain: #If block is part of main_chain
+        if main_chain:                      #If block is part of main_chain
             #1.1- Add all CBTx's to the blockchain (TxO table and UTxO table)
             for CBTx in block.CBTx_list:
                 self.add_TxO(CBTx, None, block)
                 self.add_UTxO(CBTx, None, block)
             #1.2- Add all Tx's to the blockchain
             for Tx in block.Tx_list:
-                self.add_Tx(Tx, block) #Adds all TxO's to TxO table and modifies UTxO table accordingly
+                self.add_Tx(Tx, block)      #Adds all TxO's to TxO table and modifies UTxO table accordingly
             #2- Add the block to the blocks table
             self.cursor.execute("INSERT OR IGNORE INTO blocks VALUES (?, ?, ?, ?, ?)", 
                                 (block.hash, block.prevh if block.prevh else "None", block.height, True, pickle.dumps(block)))
@@ -252,7 +252,7 @@ class BlockChain():
     def add_TxO(self, TxO, Tx, block, confirmed=True):
         self.cursor.execute("INSERT OR IGNORE INTO TxOs VALUES (?, ?, ?, ?, ?)", 
                             (TxO.hash, (Tx.hash if Tx else "None"), block.hash, confirmed, pickle.dumps(TxO)))
-        self.set_TxO(TxO, confirmed) #For good measure (used by winner blocks during chain reorgs)
+        self.set_TxO(TxO, confirmed)    #For good measure (used by winner blocks during chain reorgs)
         
     def add_UTxO(self, TxO, Tx, block):
         self.cursor.execute("INSERT INTO UTxOs VALUES (?, ?, ?, ?, ?, ?)", 
@@ -280,7 +280,7 @@ class BlockChain():
             query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
         #Undo the old path blocks (Remove generated UTxOs and re-insert spent ones)
         for orphan in old_path:
-            for Tx in orphan.Tx_list:     #Undos the Tx's (and their Tx_fee CBTxOs) (& unconform them in TxOs table)
+            for Tx in orphan.Tx_list:     #Undos the Tx's (and their Tx_fee CBTxOs) (& unconfirm them in TxOs table)
                 self.del_Tx(Tx, orphan)
             for CBTx in orphan.CBTx_list: #Remove CBTxOs from UTxOs table (& unconfirm them in TxOs table)
                 self.cursor.execute("DELETE FROM UTxOs WHERE o_hash = ?", (CBTx.hash,))
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     a2.mine()
     chain.process_block(a2)
 
-#Everything below is AI generated code for testing the chain robustness  
+    #Everything below here is AI generated code for bulk testing of the chain's robustness  
 
     print("\n========== EXTENDED MAIN CHAIN TEST ==========\n")
 

@@ -26,6 +26,8 @@ class DsCoinLogin(QDialog):
 
         self.add_btn = QPushButton("Add")
         self.add_btn.setIcon(QIcon.fromTheme("list-add"))
+        self.add_btn.setMinimumWidth(80)
+        self.add_btn.setStyleSheet(styleSheets.good_btn)
 
         self.error_label = QLabel("TEST ERROR TEST ERROR TEST ERROR TEST ERROR")
         self.error_label.setStyleSheet("color: crimson;")

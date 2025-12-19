@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QPlainT
                                QLineEdit, QPushButton, QTableWidget, QHBoxLayout, QLayout,
                                QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
                                QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
-                               QMessageBox, QDoubleSpinBox, QStyle, QMainWindow)
+                               QMessageBox, QDoubleSpinBox, QStyle, QMainWindow, QAbstractItemView)
 from PySide6.QtCore import Qt, QLocale, QSize
 from PySide6.QtGui import QDoubleValidator, QIcon, QAction
 import qdarktheme
@@ -11,7 +11,8 @@ import sys
 class DsCoinUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DsCoin")
+        self.setWindowTitle("DsCoin Client v0.1.0")
+        self.setWindowIcon(QIcon("src\\dsc\\ui\\assets\\icons\\logo.png"))
         self.resize(1080, 720)
         self.setMinimumSize(920, 600)
 
@@ -44,12 +45,14 @@ class DsCoinUI(QMainWindow):
 
         self.output_tx_list = QTableWidget()
         self.output_tx_list.setColumnCount(4)
-        self.output_tx_list.setHorizontalHeaderLabels(["Name", "Reciever Address", "Hash", "Amount (DSC)"])
+        self.output_tx_list.setHorizontalHeaderLabels(["Name", "Reciever Address", "Hash", "Amount\n(DSC)"])
         self.output_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.output_tx_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.output_tx_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.output_tx_list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.output_tx_list.setStyleSheet("font-size: 8pt")
 
         self.create_tx_label = QLabel("Create Transaction Output")
         self.create_tx_label.setStyleSheet(styleSheets.header3)
@@ -82,11 +85,14 @@ class DsCoinUI(QMainWindow):
 
         self.input_tx_list = QTableWidget()
         self.input_tx_list.setColumnCount(3)
-        self.input_tx_list.setHorizontalHeaderLabels(["Hash", "Amount (DSC)", "Select"])
+        self.input_tx_list.setHorizontalHeaderLabels(["Hash", "Amount\n(DSC)", "Select"])
         self.input_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.input_tx_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.input_tx_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.input_tx_list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.input_tx_list.setStyleSheet("font-size: 8pt")
 
         self.input_amt_label = QLabel("---")
         self.input_amt_label.setStyleSheet("font-weight: bold; color: green;")
@@ -96,13 +102,13 @@ class DsCoinUI(QMainWindow):
         self.remainder_label.setStyleSheet("font-weight: bold;")
 
         self.sign_btn = QPushButton(QIcon("src\\dsc\\ui\\assets\\icons\\key.png"), " Sign Transaction")
-        self.sign_btn.setMinimumWidth(200)
+        self.sign_btn.setMinimumSize(200, 50)
         self.sign_btn.setStyleSheet(styleSheets.big_btn + styleSheets.good_btn)
         self.sign_btn.setIconSize(QSize(20, 20))
         
         #============================================Layouts============================================
         wallet_layout = QHBoxLayout()
-        wallet_layout.setContentsMargins(40, 20, 40, 20)
+        wallet_layout.setContentsMargins(30, 20, 30, 20)
         wallet_layout.setSpacing(20)
         wallet_layout_container1 = QVBoxLayout()
 
