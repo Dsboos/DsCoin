@@ -1,27 +1,44 @@
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QPlainTextEdit,
-QLineEdit, QPushButton, QTableWidget, QHBoxLayout, QLayout,
-QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
-QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
-QMessageBox, QDoubleSpinBox, QStyle)
+                               QLineEdit, QPushButton, QTableWidget, QHBoxLayout, QLayout,
+                               QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
+                               QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
+                               QMessageBox, QDoubleSpinBox, QStyle, QMainWindow)
 from PySide6.QtCore import Qt, QLocale, QSize
-from PySide6.QtGui import QDoubleValidator, QIcon
+from PySide6.QtGui import QDoubleValidator, QIcon, QAction
+import qdarktheme
+import sys
 
-class DsCoinUI(QWidget):
+class DsCoinUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DsCoin")
         self.resize(1080, 720)
         self.setMinimumSize(920, 600)
 
-        #All elements
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+        self.menu = QWidget()
+        self.setMenuWidget(self.menu)
+
+        self.wallet_tab = QWidget()
+        self.mine_tab = QWidget()
+        self.blockchain_tab = QWidget()
+        
+        self.tab_widget.addTab(self.wallet_tab, QIcon("src\\dsc\\ui\\assets\\icons\\wallet.png"),"My Wallet")
+        self.tab_widget.addTab(self.mine_tab, QIcon("src\\dsc\\ui\\assets\\icons\\pickaxe.png"), "Mine Blocks")
+        self.tab_widget.addTab(self.blockchain_tab, QIcon("src\\dsc\\ui\\assets\\icons\\blockchain.png"), "View Blockchain")
+        self.tab_widget.tabBar().setMinimumWidth(500)
+        self.tab_widget.setStyleSheet("QTabBar::tab {padding-left: 20px; padding-right: 20px;}")
+
+        self.init_wallet_tab()
+        self.init_menu()
+
+    def init_wallet_tab(self):
+        #============================================UI Elements============================================
         self.output_tx_label = QLabel("Output Transactions")
         self.output_tx_label.setStyleSheet(styleSheets.header2)
 
-        self.del_all_btn = QPushButton(QIcon.fromTheme("edit-delete"), " Delete All")
-        self.del_all_btn.setMinimumWidth(100)
-        self.del_all_btn.setStyleSheet(styleSheets.bad_btn)
-        self.del_all_btn.setMaximumWidth(100)
-        self.del_tx_btn = QPushButton("Delete")
+        self.del_tx_btn = QPushButton(QIcon.fromTheme("edit-delete"), "")
         self.del_tx_btn.setStyleSheet(styleSheets.bad_btn)
         self.del_tx_btn.setMaximumWidth(100)
 
@@ -49,12 +66,9 @@ class DsCoinUI(QWidget):
         self.remainder_btn = QPushButton("Add Remainder")
         self.remainder_btn.setMaximumWidth(100)
 
-        self.sk_field = QPlainTextEdit(placeholderText="Enter Private Key")
-        self.sk_field.setMaximumHeight(50)
-
         self.error_label = QLabel("Test Error Test Error 1234 1234")
         self.error_label.setStyleSheet("color: crimson;")
-        self.add_btn = QPushButton("Add")
+        self.add_btn = QPushButton("Add Output")
         self.add_btn.setStyleSheet(styleSheets.good_btn)
         self.clear_btn = QPushButton("Clear All")
 
@@ -67,36 +81,30 @@ class DsCoinUI(QWidget):
         self.refresh_btn.setIcon(QIcon.fromTheme("system-reboot"))
 
         self.input_tx_list = QTableWidget()
-        self.input_tx_list.setColumnCount(4)
-        self.input_tx_list.setHorizontalHeaderLabels(["Hash", "Sender Address", "Amount (DSC)", "Select"])
+        self.input_tx_list.setColumnCount(3)
+        self.input_tx_list.setHorizontalHeaderLabels(["Hash", "Amount (DSC)", "Select"])
         self.input_tx_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.input_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.input_tx_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.input_tx_list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.input_tx_list.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.input_tx_list.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
         self.input_amt_label = QLabel("---")
         self.input_amt_label.setStyleSheet("font-weight: bold; color: green;")
         self.output_amt_label = QLabel("---")
-        self.output_amt_label.setStyleSheet("font-weight: bold; color: crimson;")
+        self.output_amt_label.setStyleSheet("font-weight: bold; color: orange;")
         self.remainder_label = QLabel("---")
         self.remainder_label.setStyleSheet("font-weight: bold;")
 
         self.sign_btn = QPushButton(QIcon("src\\dsc\\ui\\assets\\icons\\key.png"), " Sign Transaction")
+        self.sign_btn.setMinimumWidth(200)
         self.sign_btn.setStyleSheet(styleSheets.big_btn + styleSheets.good_btn)
         self.sign_btn.setIconSize(QSize(20, 20))
         
-        self.initUI()
-
-    def initUI(self):
-        master_layout = QGridLayout()
-        
-        #---------------Transaction Wizard START---------------
-        tx_wizard = QGroupBox("Transactions")
-        tx_layout = QHBoxLayout()
-        tx_layout.setContentsMargins(40, 20, 40, 20)
-        tx_layout.setSpacing(20)
-        tx_layout_container1 = QVBoxLayout()
+        #============================================Layouts============================================
+        wallet_layout = QHBoxLayout()
+        wallet_layout.setContentsMargins(40, 20, 40, 20)
+        wallet_layout.setSpacing(20)
+        wallet_layout_container1 = QVBoxLayout()
 
         #---------Transaction List START---------
         tx_viewer = QVBoxLayout()
@@ -105,12 +113,11 @@ class DsCoinUI(QWidget):
         header1.addWidget(self.output_tx_label)
         header1.addStretch()
         header1.addWidget(self.del_tx_btn)
-        header1.addWidget(self.del_all_btn)
 
         tx_viewer.addLayout(header1)
         tx_viewer.addWidget(self.output_tx_list)
 
-        tx_layout_container1.addLayout(tx_viewer, 2)
+        wallet_layout_container1.addLayout(tx_viewer, 2)
 
         #---------Transaction List END---------
 
@@ -140,56 +147,62 @@ class DsCoinUI(QWidget):
         tx_form.setLayout(4, QFormLayout.ItemRole.FieldRole, btn_container)
         tx_form.addRow(self.error_label)
 
-        tx_layout_container1.addLayout(tx_form, 1)
+        wallet_layout_container1.addLayout(tx_form, 1)
 
         #---------Transaction Form END---------
 
-        tx_layout_container2 = QVBoxLayout()
-        tx_layout_container2.setSpacing(10)
+        wallet_layout_container2 = QVBoxLayout()
+        wallet_layout_container2.setSpacing(10)
 
         #---------UTXO List START---------
         header3 = QHBoxLayout()
         header3.addWidget(self.input_tx_label)
         header3.addStretch()
-        header3.addWidget(self.select_all_btn)
         header3.addWidget(self.refresh_btn)
+        header3.addWidget(self.select_all_btn)
 
-        tx_layout_container2.addLayout(header3)
-        tx_layout_container2.addWidget(self.input_tx_list)
-
-        sk_container = QHBoxLayout()
-        sk_label = QLabel("Private Key:")
-        sk_label.setAlignment(Qt.AlignmentFlag.AlignTop)
-        sk_container.addWidget(sk_label)
-        sk_container.addWidget(self.sk_field)
-
-        tx_layout_container2.addLayout(sk_container)
-        tx_layout_container2.addSpacerItem(QSpacerItem(0, 20))
+        wallet_layout_container2.addLayout(header3)
+        wallet_layout_container2.addWidget(self.input_tx_list)
 
         footer1 = QHBoxLayout()
         tx_data = QGridLayout()
-        tx_data.addWidget(QLabel("Tx Input Total:"), 0, 0)
-        tx_data.addWidget(QLabel("Tx Output Total:"), 1, 0)
-        tx_data.addWidget(QLabel("Remainder:"), 2, 0)
+        tx_data.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tx_data.addWidget(QLabel("Input Total (DSC):"), 0, 0)
+        tx_data.addWidget(QLabel("Output Total (DSC):"), 1, 0)
+        tx_data.addWidget(QLabel("Remainder (DSC):"), 2, 0)
         tx_data.addWidget(self.input_amt_label, 0, 1)
         tx_data.addWidget(self.output_amt_label, 1, 1)
         tx_data.addWidget(self.remainder_label, 2, 1)
         footer1.addLayout(tx_data)
+        footer1.addStretch()
         footer1.addWidget(self.sign_btn)
 
-        tx_layout_container2.addLayout(footer1)
+        wallet_layout_container2.addLayout(footer1)
 
         #---------UTXO List END---------
 
-        tx_layout.addLayout(tx_layout_container1)
-        tx_layout.addLayout(tx_layout_container2)
-        tx_wizard.setLayout(tx_layout)
-        master_layout.addWidget(tx_wizard, 0, 0)
-
-        #---------------Transaction Wizard END---------------
-
-        self.setLayout(master_layout)
+        wallet_layout.addLayout(wallet_layout_container1)
+        wallet_layout.addLayout(wallet_layout_container2)
+        self.wallet_tab.setLayout(wallet_layout)
         
+    def init_menu(self):
+        self.change_wallet_btn = QPushButton(QIcon().fromTheme("user-available"), "")
+        self.change_wallet_btn.setStyleSheet("border: None;")
+        logo = QLabel("DsCoin Client")
+        logo.setStyleSheet(styleSheets.header1)
+        self.qotd = QLabel("The only coin that really fancies you (as a friend).")
+        self.qotd.setAlignment(Qt.AlignmentFlag.AlignBottom)
+        menu_layout = QHBoxLayout()
+        menu_layout.addWidget(logo)
+        menu_layout.addWidget(self.qotd)
+        menu_layout.addStretch()
+        menu_layout.addWidget(QLabel("Change Wallet"))
+        menu_layout.addWidget(self.change_wallet_btn)
+        self.menu.setLayout(menu_layout)
+        self.menu.setObjectName("menu")
+        self.menu.setStyleSheet("QWidget#menu { background-color: #173F5F ;}")
+       
+
 class styleSheets:
     big_btn = "QPushButton {font-size: 12pt; font-weight: bold; padding: 10px;}"
     good_btn = "QPushButton:hover{background-color: green; color: white;} QPushButton:pressed{background-color: darkgreen}" 
@@ -199,7 +212,8 @@ class styleSheets:
     header3 = "QLabel{font-size: 12pt; font-weight: bold;}"
 
 if __name__ in "__main__":
-    app = QApplication()
+    app = QApplication(sys.argv)
+    qdarktheme.setup_theme("dark")
     win = DsCoinUI()
     win.show()
     app.exec()

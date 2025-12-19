@@ -519,3 +519,6 @@ if __name__ == "__main__":
     f3 = Block(f2.hash, pk, name="deep_fork_3")
     f3.mine()
     chain.process_block(f3)    # SHOULD TRIGGER REORG ACROSS SNAPSHOT
+
+    print(pk.to_string().hex())
+    print(sk.to_string().hex())

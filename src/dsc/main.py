@@ -1,20 +1,24 @@
+#Custom imports
 from dsc.utils.prettyprint import warn, fail, success, info
 from dsc.blockchain.transactions import TxO, Tx
 from dsc.blockchain.blocks import Block, CBTx
 from dsc.blockchain.blockchain import BlockChain
+from dsc.wallet_handler import WalletHandler
+from dsc.login import DsCoinLogin
 from dsc.ui.ui import DsCoinUI
-from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+#PySide6 imports
+from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
+import qdarktheme
+#Other imports
 import pickle
 import sqlite3
 import ecdsa
 
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, pk):
+    def __init__(self, wh):
         super().__init__()
-
-        self.user = pk
 
         #Button Cooldowns
         #Output add cooldown
@@ -24,159 +28,137 @@ class DsCoinClient(DsCoinUI):
         self.add_output_cooldown_dur = 1000 # 1 second cooldown
         
         #Connections
+        self.change_wallet_btn.clicked.connect(self.change_wallet)
+
         self.add_btn.clicked.connect(self.add_output)
-        self.clear_btn.clicked.connect(self.clear_output_form)
-        self.del_all_btn.clicked.connect(self.del_all_tx)
+        self.remainder_btn.clicked.connect(self.add_remainder)
+
         self.del_tx_btn.clicked.connect(self.del_tx)
+        self.clear_btn.clicked.connect(self.clear_output_form)
+
+        # self.refresh_btn.clicked.connect()
+
         self.select_all_btn.clicked.connect(self.select_all_inputs)
-        self.refresh_btn.clicked.connect(self.refresh_input_list)
-        self.input_tx_list.itemChanged.connect(self.read_input_list)
+        self.input_tx_list.itemChanged.connect(self.update_tx_data)
 
         #initial function calls
-        self.conn, self.cursor = self.initDatabase()
         self.load_output_list()
-        self.load_output_list()
+        self.load_input_list()
         self.display_error()
 
         #Application variables
+        self.output_total = 0
+        self.input_total = 0
+        self.select_all_toggle = False
 
-    def initDatabase(self):
-        connection = sqlite3.connect("data/client.db")
-        cursor = connection.cursor()
-        cursor.execute("""CREATE TABLE IF NOT EXISTS outputs (
-                    name TEXT, 
-                    rcvr TEXT, 
-                    o_hash TEXT PRIMARY KEY, 
-                    amt REAL, 
-                    obj BLOB
-                    )""")
-        cursor.execute("""CREATE TABLE IF NOT EXISTS inputs (
-                    o_hash TEXT PRIMARY KEY, 
-                    sndr TEXT, 
-                    amt REAL, 
-                    obj BLOB
-                    )""")
-        return connection, cursor
+        #Wallet Handler
+        self.wh = wh
+
+    #Addition Functions
+    def add_output(self):
+        name = self.tx_name_field.text().strip()
+        pk2 = self.pk2_field.toPlainText().strip().replace("\n", "")
+        amt = self.amt_field.value()
+        res, msg = wh.add_output(pk2, amt, name)
+        if not res:
+            self.display_error(msg)
+            return
+        self.load_output_list()
+    
+    def add_remainder(self):
+        remainder = self.input_total - self.output_total
+        if remainder > 0:
+            self.tx_name_field.setText("Remainder Amount")
+            self.pk2_field.setPlainText(wh.active_pks)
+            self.amt_field.setValue(remainder)
+        else:
+            self.display_error("Remainder is less than or equal to Zero!")
+
+    #Deletion Functions
+    def del_tx(self):
+        selected_rows =  { index.row() for index in self.output_tx_list.selectedIndexes() }
+        for row in selected_rows:
+            o_hash = self.output_tx_list.model().index(row, 2).data()
+            wh.del_output(o_hash)
+        self.load_output_list()
 
     def clear_output_form(self):
         self.tx_name_field.clear()
         self.pk2_field.clear()
-        self.amt_field.clear()
-        self.sk_field.clear()
+        self.amt_field.setValue(0)
         self.display_error()    
     
-    def add_output(self):
-        #Start cooldown timer
-        self.add_btn.setEnabled(False)
-        self.add_output_cooldown.start(self.add_output_cooldown_dur)
-        try:
-            #Give default name if unnamed
-            name = self.tx_name_field.text()
-            if not name:
-                name = "unnamed_TxO"
-
-            #Check recipient key validity
-            pk2 = convert_key(self.pk2_field.toPlainText(), "pk")
-            if not pk2:
-                self.display_error("Recipient's address is empty or invalid!")
-                return
-            
-            #Check amount validity
-            amt = self.amt_field.value()
-            if amt == 0:
-                self.display_error("Transaction amount cannot be zero ;)")
-                return
-            
-            # #Check Private key validity
-            # sk = convert_key(self.sk_field.toPlainText(), "sk")
-            # if not sk:
-            #     self.display_error("You forgot to add your private key, darling :3 (or you entered an invalid one oops)")
-            #     self.add_btn.setEnabled(True)
-            #     return
-
-            #Create the Tx output object
-            TXO = TxO(self.user, pk2, amt, name=name) #remove name=name before deployment. it is only for debugging!
-            TXO_bytes = pickle.dumps(TXO)
-            
-            #Insert TxO into the table
-            self.cursor.execute("INSERT INTO outputs VALUES (?, ?, ?, ?, ?)", 
-                                (name,  TXO.rcvr.to_string().hex(), TXO.hash, amt, TXO_bytes))
-            
-            #Commit changes then refresh table and error message
-            self.conn.commit()
-            self.display_error()
-            self.load_output_list()
-
-        except Exception as e:
-            self.display_error(f"{e}")
-            warn(f"[Tx Creation Error] {e}")
-    
-    def del_all_tx(self):
-        reply = QMessageBox.question(self, "Delete all transactions", 
-                                     "Are you sure you want to delete all unconfirmed transactions?", 
-                                     defaultButton=QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            self.cursor.execute("DELETE FROM outputs")
-            self.conn.commit()
-            self.load_output_list()
-        else:
-            return
-
-    def del_tx(self):
-        selected_rows =  { index.row() for index in self.output_tx_list.selectedIndexes() }
-        print(selected_rows)
-        for row in selected_rows:
-            o_hash = self.output_tx_list.model().index(row, 2).data()
-            print(o_hash)
-            self.cursor.execute("DELETE FROM outputs WHERE o_hash = ?", (o_hash,))
-        self.conn.commit()
-        self.load_output_list()
-
+    #Loading and Updating Functions
     def load_output_list(self):
         self.output_tx_list.clearContents()
         self.output_tx_list.setRowCount(0)
-        self.cursor.execute("SELECT * FROM outputs")
+        outputs = wh.get_outputs()
         row = 0
-        for row_content in self.cursor.fetchall():
+        for output in outputs:
             self.output_tx_list.insertRow(row)
-            self.output_tx_list.setItem(row, 0, QTableWidgetItem(row_content[0]))
-            self.output_tx_list.setItem(row, 1, QTableWidgetItem(row_content[1]))
-            self.output_tx_list.setItem(row, 2, QTableWidgetItem(row_content[2]))
-            self.output_tx_list.setItem(row, 3, QTableWidgetItem(str(row_content[3])))   
+            self.output_tx_list.setItem(row, 0, QTableWidgetItem(output[1]))
+            self.output_tx_list.setItem(row, 1, QTableWidgetItem(output[2]))
+            self.output_tx_list.setItem(row, 2, QTableWidgetItem(output[3]))
+            self.output_tx_list.setItem(row, 3, QTableWidgetItem(str(output[4])))   
             row += 1 
+        self.update_tx_data()
     
     def load_input_list(self):
+        self.input_tx_list.blockSignals(True)
         self.input_tx_list.clearContents()
         self.input_tx_list.setRowCount(0)
-        self.cursor.execute("SELECT * FROM inputs")
+        inputs = wh.get_inputs()
         row = 0
-        for row_content in self.cursor.fetchall():
+        for input in inputs:
             self.input_tx_list.insertRow(row)
-            self.input_tx_list.setItem(row, 0, QTableWidgetItem(row_content[0]))
-            self.input_tx_list.setItem(row, 1, QTableWidgetItem(row_content[1]))
-            self.input_tx_list.setItem(row, 2, QTableWidgetItem(row_content[2]))
+            self.input_tx_list.setItem(row, 0, QTableWidgetItem(input[0]))
+            self.input_tx_list.setItem(row, 1, QTableWidgetItem(str(input[4])))
             checkbox_itm = QTableWidgetItem()
             checkbox_itm.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             checkbox_itm.setCheckState(Qt.CheckState.Unchecked)
-            self.input_tx_list.setItem(0, 3, checkbox_itm)     
+            self.input_tx_list.setItem(row, 2, checkbox_itm)     
             row += 1 
+        self.input_tx_list.blockSignals(False)
+        self.update_tx_data()
 
-    def refresh_input_list(self):
-        self.cursor.execute("ATTACH DATABASE ? AS bc", ("data/blockchain.db",))
+    #Utility Functions
+    def change_wallet(self):
+        self.setDisabled(True)
+        login = DsCoinLogin(self.wh)     
+        if login.exec() != QDialog.DialogCode.Accepted:
+            self.setDisabled(False)
+            return
+        self.clear_output_form()
+        self.load_input_list()
+        self.load_output_list()
+        self.setDisabled(False)
 
-        pass
-
-    def read_input_list(self):
-        if self.input_tx_list.item(0, 3).checkState() == Qt.CheckState.Checked:
-            print("Checked")
+    def update_tx_data(self):
+        self.output_total = 0
+        self.input_total = 0
+        for row in range(self.output_tx_list.rowCount()):
+            self.output_total += float(self.output_tx_list.item(row, 3).text())
+        self.output_amt_label.setText(f"{self.output_total:.4f}")
+        for row in range(self.input_tx_list.rowCount()):
+            if self.input_tx_list.item(row, 2).checkState() != Qt.CheckState.Checked:
+                continue
+            self.input_total += float(self.input_tx_list.item(row, 1).text())
+        self.input_amt_label.setText(f"{self.input_total:.4f}")
+        remainder = self.input_total - self.output_total
+        self.remainder_label.setText(f"{remainder:.4f}")
+        if remainder < 0:
+            self.remainder_label.setStyleSheet("color: crimson; font-weight: bold;")
         else:
-            print("Unchecked")
+            self.remainder_label.setStyleSheet("font-weight: bold;")
 
     def select_all_inputs(self):
-        if self.input_tx_list.item(0, 3).checkState() == Qt.CheckState.Checked:
-            print("Checked")
+        if not self.select_all_toggle:
+            for row in range(self.input_tx_list.rowCount()):
+                self.input_tx_list.item(row, 2).setCheckState(Qt.CheckState.Checked)
         else:
-            print("Unchecked")        
+            for row in range(self.input_tx_list.rowCount()):
+                self.input_tx_list.item(row, 2).setCheckState(Qt.CheckState.Unchecked)
+        self.select_all_toggle = not self.select_all_toggle
 
     def display_error(self, msg=None):
         if not msg:
@@ -186,16 +168,21 @@ class DsCoinClient(DsCoinUI):
 
 
 
-
-
 if __name__ == "__main__":
-
+    #c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7
+    #73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd
     sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     pk = sk.get_verifying_key()
     success(f"[Public Key]  {pk.to_string().hex()}")
     success(f"[Private Key] {sk.to_string().hex()}")
+
     app = QApplication()
-    win = DsCoinClient(pk)
+    qdarktheme.setup_theme("dark")
+    wh = WalletHandler()
+    login = DsCoinLogin(wh)
+    if login.exec() != QDialog.DialogCode.Accepted:
+        exit(1)
+    win = DsCoinClient(wh)
     win.show()
     app.exec()
 
