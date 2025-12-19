@@ -6,13 +6,14 @@ import sqlite3
 import pickle
 import ecdsa
 import random
+import sys, os
 
 #Rule Number One: Always use hashes to reference blocks. Only use objs when details within blocks are required
 class BlockChain():
     def __init__(self, root_block, mine_reward=64, Tx_limit = 5, difficulty=3, name="unnamed_blockchain"):
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
-        self.conn = sqlite3.Connection("data/blockchain.db")
+        self.conn = sqlite3.Connection(self.get_db_path())
         self.cursor = self.conn.cursor()
         self.init_db()  #Initialize the blockchain database
 
@@ -30,7 +31,22 @@ class BlockChain():
 
         self.save_snapshot()
 
+    def get_db_path(self):
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(__file__)
+
+        data_dir = os.path.join(base_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+
+        return os.path.join(data_dir, "database.db")
+
+
     def init_db(self):
+        # self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
+                            
+        #                     )""")
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS TxOs (
                             o_hash TEXT PRIMARY KEY,
                             tx_hash TEXT,

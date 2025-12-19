@@ -188,8 +188,8 @@ class DsCoinClient(DsCoinUI):
 
 
 if __name__ == "__main__":
-    #Abrar's pk: c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7
-    #Abrar's sk: 73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd
+    rpk = "c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7"
+    rsk = "73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd"
     sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     pk = sk.get_verifying_key()
     success(f"[Public Key]  {pk.to_string().hex()}")
@@ -197,8 +197,10 @@ if __name__ == "__main__":
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
-    
-    #
+
+    #Blockchain Handling
+    root = Block(None, rpk)
+    bc = BlockChain(root)
 
     wh = WalletHandler()
     login = DsCoinLogin(wh)
