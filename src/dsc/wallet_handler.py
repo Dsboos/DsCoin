@@ -140,6 +140,12 @@ class WalletHandler():
         self.cursor.execute("DELETE FROM outputs WHERE o_hash = ?", (o_hash,))
         self.conn.commit()
 
+    def del_wallet(self, pks):
+        self.cursor.execute("DELETE FROM outputs WHERE pk = ?", (pks,))
+        self.cursor.execute("DELETE FROM inputs WHERE pk = ?", (pks,))
+        self.cursor.execute("DELETE FROM wallets WHERE pk = ?", (pks,))
+        self.conn.commit()
+
     #Utility Functions
     def convert_key(self, key, type):
         key.strip("\n")

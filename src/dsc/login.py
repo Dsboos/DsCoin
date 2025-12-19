@@ -1,11 +1,10 @@
 from PySide6.QtWidgets import (QDialog, QLineEdit, QPlainTextEdit, QPushButton, QLabel, QApplication,
                                QFormLayout, QHBoxLayout, QVBoxLayout, QTableWidget, QTableWidgetItem,
-                               QListWidget, QHeaderView, QAbstractItemView)
+                               QHeaderView, QAbstractItemView, QMessageBox)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 import qdarktheme
 from dsc.wallet_handler import WalletHandler
-
 
 
 class DsCoinLogin(QDialog):
@@ -13,6 +12,7 @@ class DsCoinLogin(QDialog):
         super().__init__()
         self.setWindowTitle("DsCoin Login")
         self.setFixedSize(460, 580)
+        self.setWindowIcon(QIcon("src\\dsc\\ui\\assets\\icons\\logo.png"))
         
         #UI Elements
         self.name_field = QLineEdit(placeholderText="Enter Wallet Name")
@@ -24,14 +24,19 @@ class DsCoinLogin(QDialog):
         self.sk_field = QPlainTextEdit(placeholderText="Enter Private Key")
         self.sk_field.setMaximumHeight(50)
 
-        self.add_btn = QPushButton("Add")
+        self.add_btn = QPushButton("Add Wallet")
         self.add_btn.setIcon(QIcon.fromTheme("list-add"))
         self.add_btn.setMinimumWidth(80)
         self.add_btn.setStyleSheet(styleSheets.good_btn)
+        self.add_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.error_label = QLabel("TEST ERROR TEST ERROR TEST ERROR TEST ERROR")
         self.error_label.setStyleSheet("color: crimson;")
         self.error_label.setMaximumHeight(15)
+
+        self.del_btn = QPushButton(QIcon().fromTheme("edit-delete"), "")
+        self.del_btn.setStyleSheet(styleSheets.bad_btn)
+        self.del_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.wallet_list = QTableWidget()
         self.wallet_list.setColumnCount(2)
@@ -51,10 +56,12 @@ class DsCoinLogin(QDialog):
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setStyleSheet(styleSheets.bad_btn)
         self.cancel_btn.setFixedWidth(100)
+        self.cancel_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         #Application Data & Connections
         self.wh = wallet_handler
         self.add_btn.clicked.connect(self.add_wallet)
+        self.del_btn.clicked.connect(self.del_wallet)
         self.cancel_btn.clicked.connect(self.reject)
         self.login_btn.clicked.connect(self.open_wallet)
 
@@ -65,7 +72,7 @@ class DsCoinLogin(QDialog):
     
     def initUI(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(25, 20, 25, 20)
+        main_layout.setContentsMargins(20, 10, 20, 20)
         main_layout.setSpacing(10)
 
         #Header
@@ -80,7 +87,7 @@ class DsCoinLogin(QDialog):
 
         #Add Wallet form
         wallet_form = QFormLayout()
-        h2 = QLabel("Add Wallet")
+        h2 = QLabel("Add Wallet:")
         h2.setStyleSheet(styleSheets.header3)
         wallet_form.addRow(h2)
         wallet_form.addRow("Name: ", self.name_field)
@@ -93,12 +100,18 @@ class DsCoinLogin(QDialog):
         wallet_form.setLayout(4, QFormLayout.ItemRole.SpanningRole, btn_container1)
 
         main_layout.addLayout(wallet_form)
+        main_layout.addSpacing(8)
 
         #Wallet Selector
-        h3 = QLabel("Select Wallet")
+        h3_container = QHBoxLayout()
+        h3 = QLabel("Select Wallet:")
         h3.setStyleSheet(styleSheets.header3)
-        main_layout.addWidget(h3)
+        h3_container.addWidget(h3)
+        h3_container.addStretch()
+        h3_container.addWidget(self.del_btn)
+        main_layout.addLayout(h3_container)
         main_layout.addWidget(self.wallet_list)
+
         btn_container2 = QHBoxLayout()
         btn_container2.addWidget(self.cancel_btn)
         btn_container2.addStretch()
@@ -151,6 +164,22 @@ class DsCoinLogin(QDialog):
             return
         self.accept()
 
+    def del_wallet(self):
+        selected_row =  [index.row() for index in self.wallet_list.selectedIndexes()]
+        if not selected_row:
+            self.display_error("Select a wallet to remove first >:O")
+            return
+        pk = self.wallet_list.model().index(selected_row[0], 1).data()
+        reply = QMessageBox.question(self, "Remove Wallet?", 
+                                     "Make sure your remember your private key!\nYour wallet (and UTXOs) will still exist after removing—you just won't be able to access it until you add it back.", 
+                                     defaultButton=QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            self.wh.del_wallet(pk)
+            self.load_wallets()
+            self.display_error()
+        else:
+            return
+
     def display_error(self, msg=None):
         if not msg:
             self.error_label.setText("")
@@ -168,7 +197,7 @@ class styleSheets:
 if __name__ in "__main__":
     app = QApplication()
     wh = WalletHandler()
-    qdarktheme.setup_theme("dark")
+    qdarktheme.setup_theme("dark", "rounded")
     win = DsCoinLogin(wh)
     win.show()
     app.exec()
