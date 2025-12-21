@@ -10,43 +10,41 @@ import sys, os
 
 #Rule Number One: Always use hashes to reference blocks. Only use objs when details within blocks are required
 class BlockChain():
-    def __init__(self, root_block, mine_reward=64, Tx_limit = 5, difficulty=3, name="unnamed_blockchain"):
+    def __init__(self, root=None, difficulty=3, tx_limit=5, reward=64, name="unnamed_blockchain"):
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
-        self.conn = sqlite3.Connection(self.get_db_path())
+        self.conn = sqlite3.Connection("data/blockchain.db")
         self.cursor = self.conn.cursor()
         self.init_db()  #Initialize the blockchain database
 
         #Chain Details
         self.name = name
         self.height = 0
-        self.root = root_block
-        self.add_block(self.root)
-        self.surface = self.root
+        self.root = root
+        self.surface = None
+        if root:
+            self.add_block(root)
+            self.surface = self.root
 
         #Block Specifications
         self.difficulty = difficulty
-        self.Tx_limit = Tx_limit
-        self.mine_reward = mine_reward
+        self.Tx_limit = tx_limit
+        self.mine_reward = reward
 
+        self.init_blockchain()
         self.save_snapshot()
 
-    def get_db_path(self):
-        if getattr(sys, 'frozen', False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(__file__)
-
-        data_dir = os.path.join(base_dir, "data")
-        os.makedirs(data_dir, exist_ok=True)
-
-        return os.path.join(data_dir, "database.db")
-
-
     def init_db(self):
-        # self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
-                            
-        #                     )""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
+                            name TEXT,
+                            height INTEGER,
+                            rooth TEXT PRIMARY KEY,
+                            root BLOB,
+                            surface BLOB,
+                            difficulty INTEGER,
+                            tx_limit INTEGER,
+                            mine_reward INTEGER
+                            )""")
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS TxOs (
                             o_hash TEXT PRIMARY KEY,
                             tx_hash TEXT,
@@ -79,6 +77,28 @@ class BlockChain():
                             )""")
         self.conn.commit()
 
+    def init_blockchain(self):
+        query = self.cursor.execute("SELECT * FROM blockchain").fetchone()
+        if not query:
+            self.save_state()
+            info(f"[{self.name}] Couldn't find existing blockchain, so made a new one! Set the root if you haven't already.")
+            return
+        self.name = query[0]
+        self.height = query[1]
+        self.root = pickle.loads(query[3])
+        self.surface = pickle.loads(query[4])
+        self.difficulty = query[5]
+        self.Tx_limit = query[6]
+        self.mine_reward = query[7]
+
+    def save_state(self):
+        #First clear the existing data in the database (there can only be one entry at once)
+        self.cursor.execute("DELETE FROM blockchain")
+        #Insert the new blockchain data
+        self.cursor.execute("INSERT OR IGNORE INTO blockchain VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (self.name, self.height, self.root.hash if self.root else None, pickle.dumps(self.root), 
+                             pickle.dumps(self.surface), self.difficulty, self.Tx_limit, self.mine_reward))
+
     def refresh_db(self):
         if self.conn:
             self.conn.close()
@@ -100,7 +120,6 @@ class BlockChain():
         self.cursor.execute("INSERT INTO snapshots VALUES (?, ?, ?)",
                             (snapshot_name, self.height, self.surface.hash))
         self.conn.commit()
-
 
     def process_block(self, block):
         #A) Verifications
@@ -143,11 +162,12 @@ class BlockChain():
                 info(f"[BlockChain] {block} from a competing fork has broken surface!")
                 self.reorg(block)           #Reorganize the chain if fork defeated main chain
                 self.surface = block
-            self.conn.commit()
             return True
         else:
             fail(f"[BlockChain] {block} not added: Couldn't attach to anything!")
-            return False
+        self.conn.commit()                  #Save changes to the database after each block is processed
+        self.save_state()                     #Update the state of blockchain in memory
+        return False
 
     def verify_UTxOs(self, block, main_chain=True):
         if main_chain:                      #Use the main UTxOs table for main chain input verification
@@ -308,233 +328,239 @@ class BlockChain():
         info(f"[Chain ReOrg] Chain successfully reorganized!")
 
 
+# if __name__ == "__main__":
+#     sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)
+#     pk = sk.get_verifying_key()
+
+#     root = Block(None, pk, name="root")
+#     root.mine()
+#     txo1 = CBTx(pk, 150, type="addition")
+#     root.add_CBTx(txo1)
+
+#     chain = BlockChain(root)
+
+#     #Try adding invalid block 
+#     b1_invalid = Block(root.hash, pk, name="b1_invalid")
+#     tx_invalid1 = Tx(pk, name="invalid1")      #Client side verifications are turned off for this test. 
+#     txi1 = TxO(pk, pk, 50, name="pk_pk_50")    #The blockchain does the verification now.
+#     tx_invalid1.add_input(txi1)
+#     tx_invalid1.create_output(pk, 60, name="pk_pk_60")
+#     tx_invalid1.sign(sk)
+
+#     b1_invalid.add_Tx(tx_invalid1)                          #This will be allowed so blockchain can reject b1
+#     # b1_invalid.mine()                                 
+#     chain.process_block(b1_invalid)                         #Should be rejected
+
+#     #Add valid block b1 now
+#     b1 = Block(root.hash, pk, name="b1")
+#     tx1 = Tx(pk, name="tx1")
+#     tx1.add_input(txo1)
+#     tx1.create_output(pk, 30, name="pk_pk_30")
+#     tx1.sign(sk)
+
+#     b1.add_Tx(tx1)
+#     b1.mine()
+#     chain.process_block(b1)
+    
+#     #Make fork block a1
+#     a1 = Block(root.hash, pk, name="a1")
+#     tx2 = Tx(pk, name="tx2")
+#     tx2.add_input(txo1)
+#     txo2 = tx2.create_output(pk, 67, name="pk_pk_67")
+#     tx2.sign(sk)
+
+#     a1.add_Tx(tx2)
+#     a1.mine()
+#     chain.process_block(a1)
+
+#     #Make fork longer than main chain by adding another block a2
+#     a2 = Block(a1.hash, pk, name="a2")
+#     tx2 = Tx(pk, name="tx2")
+#     tx2.add_input(txo2)
+#     tx2.create_output(pk, 30, name="pk_pk_30")
+#     tx2.sign(sk)
+
+#     a2.add_Tx(tx2)
+#     a2.mine()
+#     chain.process_block(a2)
+
+#     #Everything below here is AI generated code for bulk testing of the chain's robustness  
+
+#     print("\n========== EXTENDED MAIN CHAIN TEST ==========\n")
+
+#     # --- Extend main chain to b2, b3, b4 ---
+#     prev = b1
+#     spendable = tx1.outputs[0]   # pk_pk_30
+
+#     main_blocks = []
+
+#     for i in range(2, 5):
+#         bi = Block(prev.hash, pk, name=f"b{i}")
+#         tx = Tx(pk, name=f"tx_main_{i}")
+#         tx.add_input(spendable)
+#         spendable = tx.create_output(pk, 25 - i, name=f"pk_pk_{25 - i}")
+#         tx.sign(sk)
+
+#         bi.add_Tx(tx)
+#         bi.mine()
+#         chain.process_block(bi)
+
+#         main_blocks.append(bi)
+#         prev = bi
+
+#     print("\n========== FORK TESTS ==========\n")
+
+#     # Fork from b2
+#     fork_base = main_blocks[0]  # b2
+
+#     # --- Fork block f1 (VALID spend) ---
+#     f1 = Block(fork_base.hash, pk, name="f1_valid")
+#     txf1 = Tx(pk, name="tx_f1_valid")
+#     txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])  # spend b2 output
+#     f1_out = txf1.create_output(pk, 10, name="pk_pk_10")
+#     txf1.sign(sk)
+
+#     f1.add_Tx(txf1)
+#     f1.mine()
+#     chain.process_block(f1)
+
+#     # --- Fork block f2 (DOUBLE SPEND) ---
+#     f2 = Block(f1.hash, pk, name="f2_double_spend")
+#     txf2 = Tx(pk, name="tx_f2_double_spend")
+#     txf2.add_input(main_blocks[0].Tx_list[0].outputs[0])  # same input again
+#     txf2.create_output(pk, 5, name="pk_pk_5")
+#     txf2.sign(sk)
+
+#     f2.add_Tx(txf2)
+#     f2.mine()
+#     chain.process_block(f2)      # SHOULD FAIL
+
+#     # --- Fork block f3 (FAKE INPUT) ---
+#     f3 = Block(f1.hash, pk, name="f3_fake_utxo")
+#     txf3 = Tx(pk, name="tx_f3_fake")
+#     fake_utxo = TxO(pk, pk, 999, name="FAKE_UTXO")
+#     txf3.add_input(fake_utxo)
+#     txf3.create_output(pk, 1, name="pk_pk_1")
+#     txf3.sign(sk)
+
+#     f3.add_Tx(txf3)
+#     f3.mine()
+#     chain.process_block(f3)      # SHOULD FAIL
+
+#     print("\n========== FORK OVERTAKES MAIN CHAIN ==========\n")
+
+#     # --- Valid fork extension to trigger reorg ---
+#     f2_valid = Block(f1.hash, pk, name="f2_valid")
+#     txf2v = Tx(pk, name="tx_f2_valid")
+#     txf2v.add_input(f1_out)
+#     f2v_out = txf2v.create_output(pk, 6, name="pk_pk_6")
+#     txf2v.sign(sk)
+
+#     f2_valid.add_Tx(txf2v)
+#     f2_valid.mine()
+#     chain.process_block(f2_valid)
+
+#     f3_valid = Block(f2_valid.hash, pk, name="f3_valid")
+#     txf3v = Tx(pk, name="tx_f3_valid")
+#     txf3v.add_input(f2v_out)
+#     txf3v.create_output(pk, 3, name="pk_pk_3")
+#     txf3v.sign(sk)
+
+#     f3_valid.add_Tx(txf3v)
+#     f3_valid.mine()
+#     chain.process_block(f3_valid)   # SHOULD TRIGGER REORG
+
+#     print("\n========== ADVERSARIAL FEE-ONLY BLOCK TEST ==========\n")
+
+#     # Use current surface
+#     base = chain.surface
+
+# # Fetch a live UTxO from the DB
+#     row = chain.cursor.execute(
+#         "SELECT obj FROM UTxOs LIMIT 1"
+#     ).fetchone()
+
+#     assert row, "No UTxOs available to test fee-only block!"
+
+#     live_utxo = pickle.loads(row[0])
+#     # Spend a valid UTxO but create NO outputs, only fee
+#     fee_block = Block(base.hash, pk, name="fee_only_block")
+
+#     tx_fee_only = Tx(pk, name="tx_fee_only")
+#     tx_fee_only.add_input(live_utxo)     # spend last known good UTxO
+#     tx_fee_only.sign(sk)                 # no outputs => everything becomes fee
+
+#     fee_block.add_Tx(tx_fee_only)
+#     fee_block.mine()
+#     chain.process_block(fee_block)
+
+#     # Try to double-spend the SAME input in another fee-only fork block
+#     fee_fork = Block(fee_block.hash, pk, name="fee_only_double_spend")
+
+#     tx_fee_ds = Tx(pk, name="tx_fee_double_spend")
+#     tx_fee_ds.add_input(live_utxo)       # same input again
+#     tx_fee_ds.sign(sk)
+
+#     fee_fork.add_Tx(tx_fee_ds)
+#     fee_fork.mine()
+#     chain.process_block(fee_fork)        # MUST FAIL
+
+#     print("\n========== SNAPSHOT-CROSSING REORG TEST ==========\n")
+
+#     # Force a snapshot at current height
+#     chain.save_snapshot()
+#     snap_height = chain.height
+#     print(f"[TEST] Snapshot forced at height {snap_height}")
+
+#     # Extend main chain beyond snapshot
+#     prev = chain.surface
+#     utxo = spendable
+
+#     for i in range(2):
+#         b = Block(prev.hash, pk, name=f"post_snap_{i}")
+#         tx = Tx(pk, name=f"tx_post_snap_{i}")
+#         tx.add_input(utxo)
+#         utxo = tx.create_output(pk, utxo.amt - 1, name=f"pk_pk_ps_{i}")
+#         tx.sign(sk)
+
+#         b.add_Tx(tx)
+#         b.mine()
+#         chain.process_block(b)
+#         prev = b
+
+#     # Create fork that starts BEFORE snapshot
+#     fork_origin = main_blocks[0]   # well before snapshot
+
+#     f1 = Block(fork_origin.hash, pk, name="deep_fork_1")
+#     txf1 = Tx(pk, name="tx_deep_1")
+#     txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])
+#     f1_out = txf1.create_output(pk, 5, name="pk_pk_5")
+#     txf1.sign(sk)
+
+#     f1.add_Tx(txf1)
+#     f1.mine()
+#     chain.process_block(f1)
+
+#     f2 = Block(f1.hash, pk, name="deep_fork_2")
+#     txf2 = Tx(pk, name="tx_deep_2")
+#     txf2.add_input(f1_out)
+#     txf2.create_output(pk, 3, name="pk_pk_3")
+#     txf2.sign(sk)
+
+#     f2.add_Tx(txf2)
+#     f2.mine()
+#     chain.process_block(f2)
+
+#     f3 = Block(f2.hash, pk, name="deep_fork_3")
+#     f3.mine()
+#     chain.process_block(f3)    # SHOULD TRIGGER REORG ACROSS SNAPSHOT
+
+#     print(pk.to_string().hex())
+#     print(sk.to_string().hex())
 
 if __name__ == "__main__":
-    sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)
-    pk = sk.get_verifying_key()
-
-    root = Block(None, pk, name="root")
-    root.mine()
-    txo1 = CBTx(pk, 150, type="addition")
-    root.add_CBTx(txo1)
-
-    chain = BlockChain(root)
-
-    #Try adding invalid block 
-    b1_invalid = Block(root.hash, pk, name="b1_invalid")
-    tx_invalid1 = Tx(pk, name="invalid1")      #Client side verifications are turned off for this test. 
-    txi1 = TxO(pk, pk, 50, name="pk_pk_50")    #The blockchain does the verification now.
-    tx_invalid1.add_input(txi1)
-    tx_invalid1.create_output(pk, 60, name="pk_pk_60")
-    tx_invalid1.sign(sk)
-
-    b1_invalid.add_Tx(tx_invalid1)                          #This will be allowed so blockchain can reject b1
-    # b1_invalid.mine()                                 
-    chain.process_block(b1_invalid)                         #Should be rejected
-
-    #Add valid block b1 now
-    b1 = Block(root.hash, pk, name="b1")
-    tx1 = Tx(pk, name="tx1")
-    tx1.add_input(txo1)
-    tx1.create_output(pk, 30, name="pk_pk_30")
-    tx1.sign(sk)
-
-    b1.add_Tx(tx1)
-    b1.mine()
-    chain.process_block(b1)
-    
-    #Make fork block a1
-    a1 = Block(root.hash, pk, name="a1")
-    tx2 = Tx(pk, name="tx2")
-    tx2.add_input(txo1)
-    txo2 = tx2.create_output(pk, 67, name="pk_pk_67")
-    tx2.sign(sk)
-
-    a1.add_Tx(tx2)
-    a1.mine()
-    chain.process_block(a1)
-
-    #Make fork longer than main chain by adding another block a2
-    a2 = Block(a1.hash, pk, name="a2")
-    tx2 = Tx(pk, name="tx2")
-    tx2.add_input(txo2)
-    tx2.create_output(pk, 30, name="pk_pk_30")
-    tx2.sign(sk)
-
-    a2.add_Tx(tx2)
-    a2.mine()
-    chain.process_block(a2)
-
-    #Everything below here is AI generated code for bulk testing of the chain's robustness  
-
-    print("\n========== EXTENDED MAIN CHAIN TEST ==========\n")
-
-    # --- Extend main chain to b2, b3, b4 ---
-    prev = b1
-    spendable = tx1.outputs[0]   # pk_pk_30
-
-    main_blocks = []
-
-    for i in range(2, 5):
-        bi = Block(prev.hash, pk, name=f"b{i}")
-        tx = Tx(pk, name=f"tx_main_{i}")
-        tx.add_input(spendable)
-        spendable = tx.create_output(pk, 25 - i, name=f"pk_pk_{25 - i}")
-        tx.sign(sk)
-
-        bi.add_Tx(tx)
-        bi.mine()
-        chain.process_block(bi)
-
-        main_blocks.append(bi)
-        prev = bi
-
-    print("\n========== FORK TESTS ==========\n")
-
-    # Fork from b2
-    fork_base = main_blocks[0]  # b2
-
-    # --- Fork block f1 (VALID spend) ---
-    f1 = Block(fork_base.hash, pk, name="f1_valid")
-    txf1 = Tx(pk, name="tx_f1_valid")
-    txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])  # spend b2 output
-    f1_out = txf1.create_output(pk, 10, name="pk_pk_10")
-    txf1.sign(sk)
-
-    f1.add_Tx(txf1)
-    f1.mine()
-    chain.process_block(f1)
-
-    # --- Fork block f2 (DOUBLE SPEND) ---
-    f2 = Block(f1.hash, pk, name="f2_double_spend")
-    txf2 = Tx(pk, name="tx_f2_double_spend")
-    txf2.add_input(main_blocks[0].Tx_list[0].outputs[0])  # same input again
-    txf2.create_output(pk, 5, name="pk_pk_5")
-    txf2.sign(sk)
-
-    f2.add_Tx(txf2)
-    f2.mine()
-    chain.process_block(f2)      # SHOULD FAIL
-
-    # --- Fork block f3 (FAKE INPUT) ---
-    f3 = Block(f1.hash, pk, name="f3_fake_utxo")
-    txf3 = Tx(pk, name="tx_f3_fake")
-    fake_utxo = TxO(pk, pk, 999, name="FAKE_UTXO")
-    txf3.add_input(fake_utxo)
-    txf3.create_output(pk, 1, name="pk_pk_1")
-    txf3.sign(sk)
-
-    f3.add_Tx(txf3)
-    f3.mine()
-    chain.process_block(f3)      # SHOULD FAIL
-
-    print("\n========== FORK OVERTAKES MAIN CHAIN ==========\n")
-
-    # --- Valid fork extension to trigger reorg ---
-    f2_valid = Block(f1.hash, pk, name="f2_valid")
-    txf2v = Tx(pk, name="tx_f2_valid")
-    txf2v.add_input(f1_out)
-    f2v_out = txf2v.create_output(pk, 6, name="pk_pk_6")
-    txf2v.sign(sk)
-
-    f2_valid.add_Tx(txf2v)
-    f2_valid.mine()
-    chain.process_block(f2_valid)
-
-    f3_valid = Block(f2_valid.hash, pk, name="f3_valid")
-    txf3v = Tx(pk, name="tx_f3_valid")
-    txf3v.add_input(f2v_out)
-    txf3v.create_output(pk, 3, name="pk_pk_3")
-    txf3v.sign(sk)
-
-    f3_valid.add_Tx(txf3v)
-    f3_valid.mine()
-    chain.process_block(f3_valid)   # SHOULD TRIGGER REORG
-
-    print("\n========== ADVERSARIAL FEE-ONLY BLOCK TEST ==========\n")
-
-    # Use current surface
-    base = chain.surface
-
-# Fetch a live UTxO from the DB
-    row = chain.cursor.execute(
-        "SELECT obj FROM UTxOs LIMIT 1"
-    ).fetchone()
-
-    assert row, "No UTxOs available to test fee-only block!"
-
-    live_utxo = pickle.loads(row[0])
-    # Spend a valid UTxO but create NO outputs, only fee
-    fee_block = Block(base.hash, pk, name="fee_only_block")
-
-    tx_fee_only = Tx(pk, name="tx_fee_only")
-    tx_fee_only.add_input(live_utxo)     # spend last known good UTxO
-    tx_fee_only.sign(sk)                 # no outputs => everything becomes fee
-
-    fee_block.add_Tx(tx_fee_only)
-    fee_block.mine()
-    chain.process_block(fee_block)
-
-    # Try to double-spend the SAME input in another fee-only fork block
-    fee_fork = Block(fee_block.hash, pk, name="fee_only_double_spend")
-
-    tx_fee_ds = Tx(pk, name="tx_fee_double_spend")
-    tx_fee_ds.add_input(live_utxo)       # same input again
-    tx_fee_ds.sign(sk)
-
-    fee_fork.add_Tx(tx_fee_ds)
-    fee_fork.mine()
-    chain.process_block(fee_fork)        # MUST FAIL
-
-    print("\n========== SNAPSHOT-CROSSING REORG TEST ==========\n")
-
-    # Force a snapshot at current height
-    chain.save_snapshot()
-    snap_height = chain.height
-    print(f"[TEST] Snapshot forced at height {snap_height}")
-
-    # Extend main chain beyond snapshot
-    prev = chain.surface
-    utxo = spendable
-
-    for i in range(2):
-        b = Block(prev.hash, pk, name=f"post_snap_{i}")
-        tx = Tx(pk, name=f"tx_post_snap_{i}")
-        tx.add_input(utxo)
-        utxo = tx.create_output(pk, utxo.amt - 1, name=f"pk_pk_ps_{i}")
-        tx.sign(sk)
-
-        b.add_Tx(tx)
-        b.mine()
-        chain.process_block(b)
-        prev = b
-
-    # Create fork that starts BEFORE snapshot
-    fork_origin = main_blocks[0]   # well before snapshot
-
-    f1 = Block(fork_origin.hash, pk, name="deep_fork_1")
-    txf1 = Tx(pk, name="tx_deep_1")
-    txf1.add_input(main_blocks[0].Tx_list[0].outputs[0])
-    f1_out = txf1.create_output(pk, 5, name="pk_pk_5")
-    txf1.sign(sk)
-
-    f1.add_Tx(txf1)
-    f1.mine()
-    chain.process_block(f1)
-
-    f2 = Block(f1.hash, pk, name="deep_fork_2")
-    txf2 = Tx(pk, name="tx_deep_2")
-    txf2.add_input(f1_out)
-    txf2.create_output(pk, 3, name="pk_pk_3")
-    txf2.sign(sk)
-
-    f2.add_Tx(txf2)
-    f2.mine()
-    chain.process_block(f2)
-
-    f3 = Block(f2.hash, pk, name="deep_fork_3")
-    f3.mine()
-    chain.process_block(f3)    # SHOULD TRIGGER REORG ACROSS SNAPSHOT
-
-    print(pk.to_string().hex())
-    print(sk.to_string().hex())
+    bc = BlockChain()
+    print(bc.surface)
+    print(bc.root)
+    print(bc.height)
+    print(bc.name)

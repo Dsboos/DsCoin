@@ -9,7 +9,7 @@ import ecdsa
 
 #Coin Base Tx, types include: additions and miner_rewards. Additions are only authorized for testing and root block
 class CBTx():
-    def __init__(self, rcvr, amt, type="addition", name="unnamed_CBTx"):
+    def __init__(self, rcvr, amt, type="addition", name="unnamed_cbtx"):
         #Nonce
         self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
         self.name = name

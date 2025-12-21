@@ -4,6 +4,7 @@ from dsc.utils.prettyprint import warn, fail, success, info
 import pickle
 import sqlite3
 import ecdsa
+import sys, os
 
 #This module handles the client's wallets and their functionalities
 #The wallet id is synonymous with user key
@@ -56,7 +57,7 @@ class WalletHandler():
         if self.bc_conn:
             self.bc_conn.close()
         # Open a connection to the blockchain database in read-only mode
-        self.bc_conn = sqlite3.connect("file:data/blockchain.db?mode=ro", uri=True) 
+        self.bc_conn = sqlite3.connect("data/blockchain.db") 
         self.bc_cursor = self.bc_conn.cursor()
 
     #Session Management Functions

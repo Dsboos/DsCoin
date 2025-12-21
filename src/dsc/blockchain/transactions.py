@@ -178,11 +178,13 @@ def verify_Tx(Tx):
 
 
 if __name__ == "__main__":
-    sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)
-    pk = sk.get_verifying_key()
-    tx = Tx(pk)
-    txo1_invalid = tx.create_output(pk, 0)
-    txo1 = tx.create_output(pk, 0.04)
-    tx.add_input(txo1)
+    sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)  #Generate Private Key
+    pk = sk.get_verifying_key()                             #Generate Public Key
+    
+    tx = Tx(pk)                                             #Create a Tx with 'pk' as initiator
+    
+    txo1 = tx.create_output(pk, 0.04)                       #Create an output with 0.04 DsCoins as amount.
+    
     tx.sign(sk)
+    
     print(tx.info())
