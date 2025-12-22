@@ -1,6 +1,6 @@
-from dsc.utils.prettyprint import warn, fail, success, info
-from dsc.blockchain.transactions import TxO, Tx
-from dsc.blockchain.blocks import Block, CBTx, verify_block
+from dsc.common.prettyprint import warn, fail, success, info
+from dsc.common.transactions import TxO, Tx
+from dsc.common.blocks import Block, CBTx, verify_block
 from datetime import datetime
 import sqlite3
 import pickle

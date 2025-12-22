@@ -1,11 +1,11 @@
 #Custom imports
-from dsc.utils.prettyprint import warn, fail, success, info
-from dsc.blockchain.transactions import TxO, Tx
-from dsc.blockchain.blocks import Block, CBTx
-from dsc.blockchain.blockchain import BlockChain
-from dsc.wallet_handler.wallet_handler import WalletHandler
-from dsc.wallet_handler.login import DsCoinLogin
-from dsc.ui.ui import DsCoinUI
+from dsc.common.prettyprint import warn, fail, success, info
+from dsc.common.transactions import TxO, Tx
+from dsc.common.blocks import Block, CBTx
+from dsc.node.blockchain import BlockChain
+from dsc.client.wallet_handler import WalletHandler
+from dsc.client.login import DsCoinLogin
+from dsc.client.ui.ui import DsCoinUI
 #PySide6 imports
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
@@ -200,8 +200,6 @@ if __name__ == "__main__":
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
-
-    bc = BlockChain()
     wh = WalletHandler()
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:

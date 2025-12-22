@@ -1,5 +1,5 @@
-from dsc.utils.prettyprint import warn, fail, success, info
-from dsc.blockchain.hashinfo import hash_info
+from dsc.common.prettyprint import warn, fail, success, info
+from dsc.common.hashinfo import hash_info
 from datetime import datetime
 from functools import singledispatch
 import random

@@ -1,6 +1,5 @@
-import dsc.blockchain.blockchain
-from dsc.blockchain.transactions import TxO
-from dsc.utils.prettyprint import warn, fail, success, info
+from dsc.common.transactions import TxO
+from dsc.common.prettyprint import warn, fail, success, info
 import pickle
 import sqlite3
 import ecdsa

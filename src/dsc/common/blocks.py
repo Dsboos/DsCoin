@@ -1,6 +1,6 @@
-from dsc.utils.prettyprint import warn, fail, success, info
-from dsc.blockchain.transactions import TxO, Tx, verify_Tx
-from dsc.blockchain.hashinfo import hash_info
+from dsc.common.prettyprint import warn, fail, success, info
+from dsc.common.transactions import TxO, Tx, verify_Tx
+from dsc.common.hashinfo import hash_info
 from datetime import datetime
 from functools import singledispatch
 import hashlib
