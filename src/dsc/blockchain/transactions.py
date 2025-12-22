@@ -185,6 +185,6 @@ if __name__ == "__main__":
     
     txo1 = tx.create_output(pk, 0.04)                       #Create an output with 0.04 DsCoins as amount.
     
-    tx.sign(sk)
-    
+    tx.sign(sk)                                             #Returns "[Tx Verification] {Tx} has unbalanced inputs and outputs!""
+
     print(tx.info())

@@ -105,7 +105,7 @@ class DsCoinUI(QMainWindow):
         self.remainder_label = QLabel("---")
         self.remainder_label.setStyleSheet("font-weight: bold;")
 
-        self.sign_btn = QPushButton(QIcon("src\\dsc\\ui\\assets\\icons\\key.png"), " Sign Transaction")
+        self.sign_btn = QPushButton(QIcon("src\\dsc\\ui\\assets\\icons\\key.png"), " Sign and Send")
         self.sign_btn.setMinimumSize(200, 50)
         self.sign_btn.setStyleSheet(styleSheets.big_btn + styleSheets.good_btn)
         self.sign_btn.setIconSize(QSize(20, 20))

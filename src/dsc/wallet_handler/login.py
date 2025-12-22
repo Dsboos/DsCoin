@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QDialog, QLineEdit, QPlainTextEdit, QPushButton, 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 import qdarktheme
-from dsc.wallet_handler import WalletHandler
+from dsc.wallet_handler.wallet_handler import WalletHandler
 
 
 class DsCoinLogin(QDialog):

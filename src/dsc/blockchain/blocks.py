@@ -117,9 +117,11 @@ class Block():
     
     def mine(self):
         self.add_CBTx(CBTx(self.miner, self.mine_reward, type="reward"))
+        info(f"[{self}] Mining block (this may take some time)...")
         while not self.isMined():
             self.mine_seq += 1
         self.hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
+        success(f"[{self}] Block mined successfully with hash: {self.hash}")
         return self.hash
 
 

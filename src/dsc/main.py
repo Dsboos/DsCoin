@@ -3,8 +3,8 @@ from dsc.utils.prettyprint import warn, fail, success, info
 from dsc.blockchain.transactions import TxO, Tx
 from dsc.blockchain.blocks import Block, CBTx
 from dsc.blockchain.blockchain import BlockChain
-from dsc.wallet_handler import WalletHandler
-from dsc.login import DsCoinLogin
+from dsc.wallet_handler.wallet_handler import WalletHandler
+from dsc.wallet_handler.login import DsCoinLogin
 from dsc.ui.ui import DsCoinUI
 #PySide6 imports
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
@@ -188,8 +188,11 @@ class DsCoinClient(DsCoinUI):
 if __name__ == "__main__":
     #c1b0aaeb726af5fe5a9381364edc73876aa8e3095f4396a7709b88f6d136d9986ab79c0604de44a6028674322c78f8d47ade9f4df2744fba9949bf6183f91764
     #1bed2281877a42e0a1587fbdb5379aa8aca4468cce293b3ce565125acf00d992
-    rpk = "c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7"
-    rsk = "73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd"
+    rpks = "c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7"
+    rsks = "73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd"
+    rpk =  ecdsa.VerifyingKey.from_string(bytes.fromhex(rpks), curve=ecdsa.SECP256k1)
+    rsk =  ecdsa.SigningKey.from_string(bytes.fromhex(rsks), curve=ecdsa.SECP256k1)
+
     sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     pk = sk.get_verifying_key()
     success(f"[Public Key]  {pk.to_string().hex()}")
@@ -198,10 +201,7 @@ if __name__ == "__main__":
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
 
-    #Blockchain Handling
-    root = Block(None, rpk)
-    bc = BlockChain(root)
-
+    bc = BlockChain()
     wh = WalletHandler()
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:
