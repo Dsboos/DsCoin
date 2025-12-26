@@ -2,22 +2,22 @@
 from dsc.common.prettyprint import warn, fail, success, info
 from dsc.common.transactions import TxO, Tx
 from dsc.common.blocks import Block, CBTx
-from dsc.node.blockchain import BlockChain
 from dsc.client.wallet_handler import WalletHandler
+from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI
 #PySide6 imports
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
+from qasync import QEventLoop
 import qdarktheme
 #Other imports
-import random
-import pickle
-import ecdsa
+from pathlib import Path
+import random, sys, pickle, ecdsa, asyncio
 
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, wh):
+    def __init__(self, wh: WalletHandler):
         super().__init__()
 
         #Button Cooldowns
@@ -36,16 +36,10 @@ class DsCoinClient(DsCoinUI):
         self.del_tx_btn.clicked.connect(self.del_tx)
         self.clear_btn.clicked.connect(self.clear_output_form)
 
-        # self.refresh_btn.clicked.connect()
+        self.refresh_btn.clicked.connect(self.refresh_inputs)
 
         self.select_all_btn.clicked.connect(self.select_all_inputs)
         self.input_tx_list.itemChanged.connect(self.update_tx_data)
-
-        #initial function calls
-        self.load_output_list()
-        self.load_input_list()
-        self.display_error()
-        self.update_qotd()
 
         #Application variables
         self.output_total = 0
@@ -55,12 +49,32 @@ class DsCoinClient(DsCoinUI):
         #Wallet Handler
         self.wh = wh
 
+        #initial function calls
+        self.load_output_list()
+        self.display_error()
+        self.update_qotd()
+
+    #Update Loop
+    async def update_inputs(self):
+        self.setDisabled(True)
+        status = await self.wh.update_inputs()
+        if not status:
+            self.display_error("Couldn't fetch inputs from server (that or you don't have any!)")
+        else:
+            self.display_error()
+        self.load_input_list()
+        self.setDisabled(False)
+    
+    def refresh_inputs(self):
+        self.update_loop = asyncio.create_task(self.update_inputs())
+        info("[Client] Updated Inputs!")
+
     #Addition Functions
     def add_output(self):
         name = self.tx_name_field.text().strip()
         pk2 = self.pk2_field.toPlainText().strip().replace("\n", "")
         amt = self.amt_field.value()
-        res, msg = wh.add_output(pk2, amt, name)
+        res, msg = self.wh.add_output(pk2, amt, name)
         if not res:
             self.display_error(msg)
             return
@@ -70,7 +84,7 @@ class DsCoinClient(DsCoinUI):
         remainder = self.input_total - self.output_total
         if remainder > 0:
             self.tx_name_field.setText("Remainder Amount")
-            self.pk2_field.setPlainText(wh.active_pks)
+            self.pk2_field.setPlainText(self.wh.active_pks)
             self.amt_field.setValue(remainder)
         else:
             self.display_error("Remainder is less than or equal to Zero!")
@@ -80,7 +94,7 @@ class DsCoinClient(DsCoinUI):
         selected_rows =  { index.row() for index in self.output_tx_list.selectedIndexes() }
         for row in selected_rows:
             o_hash = self.output_tx_list.model().index(row, 2).data()
-            wh.del_output(o_hash)
+            self.wh.del_output(o_hash)
         self.load_output_list()
 
     def clear_output_form(self):
@@ -93,7 +107,7 @@ class DsCoinClient(DsCoinUI):
     def load_output_list(self):
         self.output_tx_list.clearContents()
         self.output_tx_list.setRowCount(0)
-        outputs = wh.get_outputs()
+        outputs = self.wh.get_outputs()
         row = 0
         for output in outputs:
             self.output_tx_list.insertRow(row)
@@ -108,12 +122,12 @@ class DsCoinClient(DsCoinUI):
         self.input_tx_list.blockSignals(True)
         self.input_tx_list.clearContents()
         self.input_tx_list.setRowCount(0)
-        inputs = wh.get_inputs()
+        inputs = self.wh.get_inputs()
         row = 0
         for input in inputs:
             self.input_tx_list.insertRow(row)
-            self.input_tx_list.setItem(row, 0, QTableWidgetItem(input[0]))
-            self.input_tx_list.setItem(row, 1, QTableWidgetItem(str(input[4])))
+            self.input_tx_list.setItem(row, 0, QTableWidgetItem(input[1]))
+            self.input_tx_list.setItem(row, 1, QTableWidgetItem(str(input[3])))
             checkbox_itm = QTableWidgetItem()
             checkbox_itm.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
             checkbox_itm.setCheckState(Qt.CheckState.Unchecked)
@@ -175,19 +189,19 @@ class DsCoinClient(DsCoinUI):
                 "A bank is a place that will lend you money if you can prove that you don't need it.",
                 "If you think no one cares about you, try missing a couple of payments.",
                 "The easiest way for your children to learn about money is for you not to have any.",
-                "The trick is to stop thinking of it as 'your' money. \033[3m—IRS auditor",
+                "The trick is to stop thinking of it as 'your' money. \033[3m—IRS auditor\033[0m",
                 "Always borrow money from a pessimist. They'll never expect it back.",
                 "They say money talks, but mine just waves goodbye.",
                 "The safest way to double your money is to fold it over and put it in your pocket.",
                 "Money is the best deodorant.",
-                "What’s the use of happiness? It can’t buy you money.",]
+                "What's the use of happiness? It can't buy you money.",]
         idx = random.randint(0,len(qotds)-1)
         self.qotd.setText(qotds[idx])
+   
         
-        
-if __name__ == "__main__":
-    #c1b0aaeb726af5fe5a9381364edc73876aa8e3095f4396a7709b88f6d136d9986ab79c0604de44a6028674322c78f8d47ade9f4df2744fba9949bf6183f91764
-    #1bed2281877a42e0a1587fbdb5379aa8aca4468cce293b3ce565125acf00d992
+def main():
+    #31d51de55b81e6a94cb97e066c79f4e5663ff15a9ffae6ae3bd6e23f7b0e8761fb0317e52fefdbfa7fd4caca83679c7208166de217bac83c037581947071ae67
+    #79f55a07dfb64ac35840eed57b26485874374290d99b86d75f6f2e2477936453
     rpks = "c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7"
     rsks = "73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd"
     rpk =  ecdsa.VerifyingKey.from_string(bytes.fromhex(rpks), curve=ecdsa.SECP256k1)
@@ -197,18 +211,24 @@ if __name__ == "__main__":
     pk = sk.get_verifying_key()
     success(f"[Public Key]  {pk.to_string().hex()}")
     success(f"[Private Key] {sk.to_string().hex()}")
+    HOST, PORT =  ("localhost", 8000)
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
-    wh = WalletHandler()
+    nc = NodeClient(HOST, PORT)
+    wh = WalletHandler(nc)
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:
         exit(1)
+        
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
     win = DsCoinClient(wh)
     win.show()
-    app.exec()
+    with loop:
+        QTimer.singleShot(0, win.refresh_inputs)
+        loop.run_forever()
 
-
-
-
-        
+if __name__ == "__main__":
+    main()

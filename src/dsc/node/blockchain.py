@@ -2,18 +2,20 @@ from dsc.common.prettyprint import warn, fail, success, info
 from dsc.common.transactions import TxO, Tx
 from dsc.common.blocks import Block, CBTx, verify_block
 from datetime import datetime
+from pathlib import Path
 import sqlite3
 import pickle
 import ecdsa
 import random
-import sys, os
+import sys
 
 #Rule Number One: Always use hashes to reference blocks. Only use objs when details within blocks are required
 class BlockChain():
     def __init__(self, root=None, difficulty=3, tx_limit=5, reward=64, name="unnamed_blockchain"):
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
-        self.conn = sqlite3.Connection("data/blockchain.db")
+        self.db_path = self.get_data_directory()/"blockchain.db"
+        self.conn = sqlite3.Connection(self.db_path)
         self.cursor = self.conn.cursor()
         self.init_db()  #Initialize the blockchain database
 
@@ -34,6 +36,16 @@ class BlockChain():
         self.init_blockchain()
         self.save_snapshot()
 
+    #Database Methods
+    def get_data_directory(self):
+        if getattr(sys, "frozen", False):
+            root = Path(sys.executable).resolve().parent
+        else:
+            root = Path(__file__).resolve().parent
+        data_directory = root / "data"
+        data_directory.mkdir(parents=True, exist_ok=True)
+        return data_directory
+    
     def init_db(self):
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
                             name TEXT,
@@ -77,6 +89,12 @@ class BlockChain():
                             )""")
         self.conn.commit()
 
+    def refresh_db(self):
+        if self.conn:
+            self.conn.close()
+        self.conn = sqlite3.Connection("node/data/blockchain.db")
+        self.cursor = self.conn.cursor()
+    #Chain State Methods
     def init_blockchain(self):
         query = self.cursor.execute("SELECT * FROM blockchain").fetchone()
         if not query:
@@ -95,6 +113,39 @@ class BlockChain():
         self.Tx_limit = query[6]
         self.mine_reward = query[7]
 
+    def reorg(self, new_block):
+        new_path = []                   #New block to common anscestor (not including)
+        old_path = []                   #Surface to common anscestor (not including)
+
+        curr_blockh = new_block.hash    #blockh stands for block hash
+        query = self.cursor.execute("SELECT prevh, main_chain, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
+        while not query[1]:             #Loop over till a block with main_chain = false, i.e a main_chain block, is reached
+            self.cursor.execute("UPDATE blocks SET main_chain = ? WHERE hash = ?", (True, curr_blockh)) #Set fork blocks as main chain
+            new_path.append(pickle.loads(query[2])) 
+            curr_blockh = query[0]
+            query = self.cursor.execute("SELECT prevh, main_chain, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
+        comm_blockh = curr_blockh        #The block where main_chain was already true is the common anscestor of both forks
+
+        curr_blockh = self.surface.hash  #Now set current block to surface and travel back to common anscestor
+        query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
+        while curr_blockh != comm_blockh:#Loop over till common block is reached, set blocks main_chain to false otw
+            self.cursor.execute("UPDATE blocks SET main_chain = ? WHERE hash = ?", (False, curr_blockh))
+            old_path.append(pickle.loads(query[1]))
+            curr_blockh = query[0]
+            query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
+        #Undo the old path blocks (Remove generated UTxOs and re-insert spent ones)
+        for orphan in old_path:
+            for Tx in orphan.Tx_list:     #Undos the Tx's (and their Tx_fee CBTxOs) (& unconfirm them in TxOs table)
+                self.del_Tx(Tx, orphan)
+            for CBTx in orphan.CBTx_list: #Remove CBTxOs from UTxOs table (& unconfirm them in TxOs table)
+                self.cursor.execute("DELETE FROM UTxOs WHERE o_hash = ?", (CBTx.hash,))
+                self.set_TxO(CBTx, False)
+
+        #Process the new path blocks (Add generated UTxOs and remove spent ones)
+        for winner in reversed(new_path): #Reversed because we are travelling from common anscestor to fork tip
+            self.add_block(winner)        #Adding block again has effect of validating generated UTxOs and nullifying spent ones.
+        info(f"[Chain ReOrg] Chain successfully reorganized!")
+
     def save_state(self):
         #First clear the existing data in the database (there can only be one entry at once)
         self.cursor.execute("DELETE FROM blockchain")
@@ -103,12 +154,6 @@ class BlockChain():
                             (self.name, self.height, self.root.hash if self.root else None, pickle.dumps(self.root), 
                              pickle.dumps(self.surface), self.difficulty, self.Tx_limit, self.mine_reward))
         self.conn.commit()
-
-    def refresh_db(self):
-        if self.conn:
-            self.conn.close()
-        self.conn = sqlite3.Connection("data/blockchain.db")
-        self.cursor = self.conn.cursor()
 
     def save_snapshot(self):
         nonce = f"{datetime.now().strftime("%H$%M$%S_%d$%m$%y")}_{random.randint(100000, 999999)}"
@@ -125,7 +170,7 @@ class BlockChain():
         self.cursor.execute("INSERT INTO snapshots VALUES (?, ?, ?)",
                             (snapshot_name, self.height, self.surface.hash if self.surface else None))
         self.conn.commit()
-
+    #Block Processing
     def process_block(self, block):
         #A) Verifications
         #1.1- Verify Block (everything except UTxO validity)
@@ -138,14 +183,14 @@ class BlockChain():
             if not self.verify_UTxOs(block):
                 fail(f"[BlockChain] {block} contained invalid UTxO(s)!")
                 return False
-            block.prev = self.surface
             block.height = self.height + 1
             self.height += 1
             self.surface.next.append(block.hash)
-            self.cursor.execute("UPDATE blocks SET obj = ? WHERE hash = ?", (pickle.dumps(self.surface),self.surface.hash)) #Update the ex-surface block to reflect new child
+            self.cursor.execute("UPDATE blocks SET obj = ? WHERE hash = ?", (pickle.dumps(self.surface), self.surface.hash)) #Update the ex-surface block to reflect new child
+            temp = self.surface
             self.surface = block
             self.add_block(block)
-            success(f"[BlockChain] {block} added onto {block.prev}!")
+            success(f"[BlockChain] {block} added onto {temp}!")
             self.conn.commit()                  #Save changes to the database after each block is processed
             self.save_state()                   #Update the state of blockchain in memory
             return True
@@ -157,10 +202,9 @@ class BlockChain():
             if not self.verify_UTxOs(block, main_chain=False):
                 fail(f"[BlockChain] Fork: {block} contained invalid UTxO(s)!")
                 return False
-            block.prev = target 
             block.height = target.height + 1
             target.next.append(block.hash)
-            self.cursor.execute("UPDATE blocks SET obj = ? WHERE hash = ?", (pickle.dumps(target),target.hash)) #Update the target block to reflect new child
+            self.cursor.execute("UPDATE blocks SET obj = ? WHERE hash = ?", (pickle.dumps(target), target.hash)) #Update the target block to reflect new child
             self.add_block(block, main_chain=False)
             success(f"[BlockChain] {block} added as fork block on {target} which currently has branches: {[x[-10:] for x in target.next]}")
 
@@ -238,7 +282,7 @@ class BlockChain():
                         warn(f"[UTxO Verification] Input {TxI} in Tx {Tx} doesn't exist in the simulated UTxOs table!")
                         return False
             return True
-
+    #Addition Methods
     def add_block(self, block, main_chain=True):
         if main_chain:                      #If block is part of main_chain
             #1.1- Add all CBTx's to the blockchain (TxO table and UTxO table)
@@ -262,18 +306,6 @@ class BlockChain():
             self.cursor.execute("INSERT OR IGNORE INTO blocks VALUES (?, ?, ?, ?, ?)", 
                                 (block.hash, block.prevh, block.height, False, pickle.dumps(block)))
     
-    def del_Tx(self, Tx, block):
-        #Set all TxOs to unconfirmed
-        for TXO in Tx.outputs:
-            self.set_TxO(TXO, False)
-        if Tx.Tx_fee:
-            self.set_TxO(Tx.Tx_fee, False)
-        #Remove TxOs (and Tx_fee CBTxOs) from UTxOs table
-        self.cursor.execute("DELETE FROM UTxOs WHERE tx_hash = ?", (Tx.hash,))
-        #Add all TxIs back to UTxOs table
-        for TxI in Tx.inputs:
-            self.add_UTxO(TxI, (Tx if isinstance(TxI, TxO) else None), block)
-
     def add_Tx(self, Tx, block, confirmed=True): #Confirmed is true for main chain additions, false for forks
         #1.1- Add Tx fees (if any) to TxOs table, and to UTxOs table if main chain
         if Tx.Tx_fee:
@@ -301,40 +333,22 @@ class BlockChain():
     def add_UTxO(self, TxO, Tx, block):
         self.cursor.execute("INSERT INTO UTxOs VALUES (?, ?, ?, ?, ?, ?)", 
                             (TxO.hash, (Tx.hash if Tx else "None"), block.hash, TxO.rcvr.to_string().hex(), TxO.amt, pickle.dumps(TxO)))
-        
-    def reorg(self, new_block):
-        new_path = []                   #New block to common anscestor (not including)
-        old_path = []                   #Surface to common anscestor (not including)
-
-        curr_blockh = new_block.hash    #blockh stands for block hash
-        query = self.cursor.execute("SELECT prevh, main_chain, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
-        while not query[1]:             #Loop over till a block with main_chain = false, i.e a main_chain block, is reached
-            self.cursor.execute("UPDATE blocks SET main_chain = ? WHERE hash = ?", (True, curr_blockh)) #Set fork blocks as main chain
-            new_path.append(pickle.loads(query[2])) 
-            curr_blockh = query[0]
-            query = self.cursor.execute("SELECT prevh, main_chain, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
-        comm_blockh = curr_blockh        #The block where main_chain was already true is the common anscestor of both forks
-
-        curr_blockh = self.surface.hash  #Now set current block to surface and travel back to common anscestor
-        query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
-        while curr_blockh != comm_blockh:#Loop over till common block is reached, set blocks main_chain to false otw
-            self.cursor.execute("UPDATE blocks SET main_chain = ? WHERE hash = ?", (False, curr_blockh))
-            old_path.append(pickle.loads(query[1]))
-            curr_blockh = query[0]
-            query = self.cursor.execute("SELECT prevh, obj FROM blocks WHERE hash = ?", (curr_blockh,)).fetchone()
-        #Undo the old path blocks (Remove generated UTxOs and re-insert spent ones)
-        for orphan in old_path:
-            for Tx in orphan.Tx_list:     #Undos the Tx's (and their Tx_fee CBTxOs) (& unconfirm them in TxOs table)
-                self.del_Tx(Tx, orphan)
-            for CBTx in orphan.CBTx_list: #Remove CBTxOs from UTxOs table (& unconfirm them in TxOs table)
-                self.cursor.execute("DELETE FROM UTxOs WHERE o_hash = ?", (CBTx.hash,))
-                self.set_TxO(CBTx, False)
-
-        #Process the new path blocks (Add generated UTxOs and remove spent ones)
-        for winner in reversed(new_path): #Reversed because we are travelling from common anscestor to fork tip
-            self.add_block(winner)        #Adding block again has effect of validating generated UTxOs and nullifying spent ones.
-        info(f"[Chain ReOrg] Chain successfully reorganized!")
-
+    #Deletion Methods
+    def del_Tx(self, Tx, block):
+        #Set all TxOs to unconfirmed
+        for TXO in Tx.outputs:
+            self.set_TxO(TXO, False)
+        if Tx.Tx_fee:
+            self.set_TxO(Tx.Tx_fee, False)
+        #Remove TxOs (and Tx_fee CBTxOs) from UTxOs table
+        self.cursor.execute("DELETE FROM UTxOs WHERE tx_hash = ?", (Tx.hash,))
+        #Add all TxIs back to UTxOs table
+        for TxI in Tx.inputs:
+            self.add_UTxO(TxI, (Tx if isinstance(TxI, TxO) else None), block)
+    #Fetching Methods
+    def fetch_UTxOs(self, pks):
+        query = self.cursor.execute("SELECT * FROM UTxOs WHERE rcvr = ?", (pks,)).fetchall()
+        return query
 
 if __name__ == "__main__":
     sk = ecdsa.SigningKey.generate(ecdsa.curves.SECP256k1)

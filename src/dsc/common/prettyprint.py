@@ -9,6 +9,7 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+    PINK = "\033[35m"
 def fail(msg):
     print(bcolors.FAIL + msg + bcolors.ENDC)
 def success(msg):
@@ -17,3 +18,7 @@ def info(msg):
     print(bcolors.OKBLUE + msg + bcolors.ENDC)
 def warn(msg):
     print(bcolors.WARNING + msg + bcolors.ENDC)
+def info2(msg):
+    print(bcolors.OKCYAN + msg + bcolors.ENDC)
+def warn2(msg):
+    print(bcolors.PINK + msg + bcolors.ENDC)

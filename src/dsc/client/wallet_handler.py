@@ -1,23 +1,28 @@
 from dsc.common.transactions import TxO
 from dsc.common.prettyprint import warn, fail, success, info
+from dsc.client.node_client import NodeClient
+from pathlib import Path
+import asyncio
 import pickle
 import sqlite3
 import ecdsa
-import sys, os
+import sys
 
 #This module handles the client's wallets and their functionalities
 #The wallet id is synonymous with user key
 class WalletHandler():
-    def __init__(self):
+    def __init__(self, nc: NodeClient):
         #Session Initialization
         self.active_pks = None                     #The user key (string) who is currently handling the client (their data is displayed)
         self.active_pk = None                      #The key object of that active user, used for signing and verifications
+        self.nc = nc
 
         # Connections initialization
-        self.bc_conn = None
-        self.bc_cursor = None
         self.init_db()
-        self.connect_blockchain_db()
+
+        #Update loop
+        self.update_loop = None
+        self.update_loop_running = False
 
     #Initialization Functions
     def init_user(self, pk):
@@ -29,7 +34,7 @@ class WalletHandler():
         return False
 
     def init_db(self):
-        self.conn = sqlite3.connect("data/client.db")
+        self.conn = sqlite3.connect(self.get_data_directory()/"client.db")
         self.cursor = self.conn.cursor()
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS wallets (
                             pk TEXT PRIMARY KEY,
@@ -46,19 +51,12 @@ class WalletHandler():
                             )""")
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS inputs (
                             pk TEXT,
-                            o_hash TEXT PRIMARY KEY, 
-                            sndr TEXT, 
-                            amt REAL, 
+                            o_hash TEXT PRIMARY KEY,
+                            rcvr TEXT,
+                            amt REAL,
                             obj BLOB
                             )""")
         
-    def connect_blockchain_db(self):
-        if self.bc_conn:
-            self.bc_conn.close()
-        # Open a connection to the blockchain database in read-only mode
-        self.bc_conn = sqlite3.connect("data/blockchain.db") 
-        self.bc_cursor = self.bc_conn.cursor()
-
     #Session Management Functions
     def change_user(self, user):
         query = self.cursor.execute("SELECT pk FROM wallets WHERE pk = ?", (user,)).fetchone()
@@ -77,9 +75,23 @@ class WalletHandler():
         query = self.cursor.execute("SELECT * FROM outputs WHERE pk = ?", (self.active_pks,)).fetchall()
         return query
     
-    def get_inputs(self):
+    async def fetch_inputs(self):
         #Fetch and return all UTxOs belonging to the user from blockchain.db
-        query = self.bc_cursor.execute("SELECT * FROM UTxOs WHERE rcvr = ?", (self.active_pks,)).fetchall()
+        query = await self.nc.fetch_utxos(self.active_pks)
+        return query
+    
+    async def update_inputs(self):
+        query = await self.fetch_inputs()
+        if query:
+            self.cursor.execute("DELETE FROM inputs")
+            for row in query:
+                self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
+                                    (self.active_pks, row[0], row[3], row[4], row[5]))
+            return True
+        return False
+    
+    def get_inputs(self):
+        query = self.cursor.execute("SELECT * FROM inputs WHERE pk = ?", (self.active_pks,))
         return query
     
     def get_wallets(self):
@@ -168,7 +180,16 @@ class WalletHandler():
         except Exception as e:
             warn(f"[Wallet Handler] Couldn't verify key pair: {e}")
             return False
-
+     
+    def get_data_directory(self):
+        if getattr(sys, "frozen", False):
+            root = Path(sys.executable).resolve().parent
+        else:
+            root = Path(__file__).resolve().parent
+        data_directory = root / "data"
+        data_directory.mkdir(parents=True, exist_ok=True)
+        return data_directory
+    
     
 
 if __name__ == "__main__":
