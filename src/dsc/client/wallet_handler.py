@@ -15,6 +15,9 @@ class WalletHandler():
         #Session Initialization
         self.active_pks = None                     #The user key (string) who is currently handling the client (their data is displayed)
         self.active_pk = None                      #The key object of that active user, used for signing and verifications
+        self.active_sks = None
+        self.active_sk = None 
+
         self.nc = nc
 
         # Connections initialization
@@ -26,10 +29,12 @@ class WalletHandler():
 
     #Initialization Functions
     def init_user(self, pk):
-        query = self.cursor.execute("SELECT pk FROM wallets WHERE pk = ?", (pk,)).fetchone()
+        query = self.cursor.execute("SELECT * FROM wallets WHERE pk = ?", (pk,)).fetchone()
         if query:
             self.active_pks = query[0]
             self.active_pk = self.convert_key(self.active_pks, "pk")
+            self.active_sks = query[1]
+            self.active_sk = self.convert_key(self.active_sks, "sk")
             return True
         return False
 
@@ -59,10 +64,12 @@ class WalletHandler():
         
     #Session Management Functions
     def change_user(self, user):
-        query = self.cursor.execute("SELECT pk FROM wallets WHERE pk = ?", (user,)).fetchone()
+        query = self.cursor.execute("SELECT * FROM wallets WHERE pk = ?", (user,)).fetchone()
         if query:                               #Check if user is already has a wallet in the database
             self.active_pks = user              #Make this user the new active user
             self.active_pk = self.convert_key(self.active_pks, "pk")
+            self.active_sks = query[1]
+            self.active_sk = self.convert_key(self.active_sks, "sk")
             return True
         else:
             warn("[Wallet] Couldn't find specified user!")
@@ -77,21 +84,31 @@ class WalletHandler():
     
     async def fetch_inputs(self):
         #Fetch and return all UTxOs belonging to the user from blockchain.db
-        query = await self.nc.fetch_utxos(self.active_pks)
-        return query
+        query, msg = await self.nc.fetch_utxos(self.active_pks)
+        return query, msg
     
     async def update_inputs(self):
-        query = await self.fetch_inputs()
+        query, msg = await self.fetch_inputs()
         if query:
             self.cursor.execute("DELETE FROM inputs")
             for row in query:
                 self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
                                     (self.active_pks, row[0], row[3], row[4], row[5]))
-            return True
-        return False
+            return True, None
+        if msg:
+            return False, msg
+        return False, None
     
     def get_inputs(self):
-        query = self.cursor.execute("SELECT * FROM inputs WHERE pk = ?", (self.active_pks,))
+        query = self.cursor.execute("SELECT * FROM inputs WHERE pk = ?", (self.active_pks,)).fetchall()
+        return query
+    
+    def get_input_from_hash(self, hash):
+        query = self.cursor.execute("SELECT * FROM inputs WHERE o_hash = ?", (hash,)).fetchone()
+        return query
+    
+    def get_output_from_hash(self, hash):
+        query = self.cursor.execute("SELECT * FROM outputs WHERE o_hash = ?", (hash,)).fetchone()
         return query
     
     def get_wallets(self):
@@ -144,12 +161,18 @@ class WalletHandler():
         self.cursor.execute("INSERT OR IGNORE INTO wallets VALUES (?, ?, ?)", (user_pks, user_sks, name if name else "Unnamed Wallet"))
         self.active_pk = user_pk
         self.active_pks = user_pks
+        self.active_sks = user_sks
+        self.active_sk = user_sk
         self.conn.commit()
         return True, None
     
     #Deletion Functions
     def del_output(self, o_hash):
         self.cursor.execute("DELETE FROM outputs WHERE o_hash = ?", (o_hash,))
+        self.conn.commit()
+
+    def del_all_outputs(self):
+        self.cursor.execute("DELETE FROM outputs WHERE pk = ?", (self.active_pks,))
         self.conn.commit()
 
     def del_wallet(self, pks):

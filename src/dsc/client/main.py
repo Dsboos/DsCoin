@@ -17,15 +17,15 @@ import random, sys, pickle, ecdsa, asyncio
 
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, wh: WalletHandler):
+    def __init__(self, wh: WalletHandler, nc: NodeClient):
         super().__init__()
 
         #Button Cooldowns
-        #Output add cooldown
-        self.add_output_cooldown = QTimer(self)
-        self.add_output_cooldown.setSingleShot(True) # Timer runs only once
-        self.add_output_cooldown.timeout.connect(lambda: self.add_btn.setEnabled(True))
-        self.add_output_cooldown_dur = 1000 # 1 second cooldown
+        #Submit cooldown
+        self.sign_btn_cooldown = QTimer(self)
+        self.sign_btn_cooldown.setSingleShot(True) # Timer runs only once
+        self.sign_btn_cooldown.timeout.connect(lambda: self.sign_btn.setEnabled(True))
+        self.sign_btn_cooldown_dur = 3000 # 3 second cooldown
         
         #Connections
         self.change_wallet_btn.clicked.connect(self.change_wallet)
@@ -41,6 +41,8 @@ class DsCoinClient(DsCoinUI):
         self.select_all_btn.clicked.connect(self.select_all_inputs)
         self.input_tx_list.itemChanged.connect(self.update_tx_data)
 
+        self.sign_btn.clicked.connect(self.compile_tx)
+
         #Application variables
         self.output_total = 0
         self.input_total = 0
@@ -48,27 +50,65 @@ class DsCoinClient(DsCoinUI):
 
         #Wallet Handler
         self.wh = wh
+        #Node Client
+        self.nc = nc
 
         #initial function calls
         self.load_output_list()
         self.display_error()
         self.update_qotd()
 
-    #Update Loop
+    #Update Functions
     async def update_inputs(self):
         self.setDisabled(True)
-        status = await self.wh.update_inputs()
-        if not status:
-            self.display_error("Couldn't fetch inputs from server (that or you don't have any!)")
+        status, msg = await self.wh.update_inputs()
+        if not status and not msg:
+            self.display_error("You don't have any UTxOs!")
+        elif not status:
+            self.display_error(f"Couldn't fetch inputs: {msg}")
         else:
             self.display_error()
         self.load_input_list()
         self.setDisabled(False)
     
     def refresh_inputs(self):
-        self.update_loop = asyncio.create_task(self.update_inputs())
+        asyncio.create_task(self.update_inputs())
         info("[Client] Updated Inputs!")
 
+    def update_tx_data(self):
+        self.output_total = 0
+        self.input_total = 0
+        for row in range(self.output_tx_list.rowCount()):
+            self.output_total += float(self.output_tx_list.item(row, 3).text())
+        self.output_amt_label.setText(f"{self.output_total:.4f}")
+        for row in range(self.input_tx_list.rowCount()):
+            if self.input_tx_list.item(row, 2).checkState() != Qt.CheckState.Checked:
+                continue
+            self.input_total += float(self.input_tx_list.item(row, 1).text())
+        self.input_amt_label.setText(f"{self.input_total:.4f}")
+        remainder = self.input_total - self.output_total
+        self.remainder_label.setText(f"{remainder:.4f}")
+        if remainder < 0:
+            self.remainder_label.setStyleSheet("color: crimson; font-weight: bold;")
+        else:
+            self.remainder_label.setStyleSheet("font-weight: bold;")
+
+    def update_qotd(self):
+        qotds = ["My wallet is like an onion—opening it makes me cry.",
+                "I tried to follow a budget, but it unfollowed me back.",
+                "How do you make a small fortune in finance? Start with a large one and invest wisely.",
+                "A bank is a place that will lend you money if you can prove that you don't need it.",
+                "If you think no one cares about you, try missing a couple of payments.",
+                "The easiest way for your children to learn about money is for you not to have any.",
+                "The trick is to stop thinking of it as 'your' money. \033[3m—IRS auditor\033[0m",
+                "Always borrow money from a pessimist. They'll never expect it back.",
+                "They say money talks, but mine just waves goodbye.",
+                "The safest way to double your money is to fold it over and put it in your pocket.",
+                "Money is the best deodorant.",
+                "What's the use of happiness? It can't buy you money.",]
+        idx = random.randint(0,len(qotds)-1)
+        self.qotd.setText(qotds[idx])
+   
     #Addition Functions
     def add_output(self):
         name = self.tx_name_field.text().strip()
@@ -136,6 +176,49 @@ class DsCoinClient(DsCoinUI):
         self.input_tx_list.blockSignals(False)
         self.update_tx_data()
 
+    #Submission Functions
+    def compile_tx(self):
+        self.sign_btn.setEnabled(False)
+        #Check if remainder is greater or equal to zero
+        if (self.input_total - self.output_total) < 0:
+            self.display_error("Cannot submit Tx with negative remainder!")
+            self.sign_btn.setEnabled(True)
+            return
+        tx = Tx(self.wh.active_pk)
+        #Add all selected inputs to Tx
+        for row in range(self.input_tx_list.rowCount()):
+            if self.input_tx_list.item(row, 2).checkState() != Qt.CheckState.Checked:
+                continue
+            txih = self.input_tx_list.item(row, 0).text()
+            txib = self.wh.get_input_from_hash(txih)[4]
+            tx.add_input(pickle.loads(txib))
+        #Add all outputs to Tx
+        for row in range(self.output_tx_list.rowCount()):
+            txoh = self.output_tx_list.item(row, 2).text()
+            txob = self.wh.get_output_from_hash(txoh)[5]
+            tx.add_output(pickle.loads(txob))
+        if self.output_tx_list.rowCount() == 0:
+            reply = QMessageBox.warning(self, "No Outputs", 
+                                     "You have no outputs added. Any selected inputs will go towards transaction fees.\nDo you want to still continue?", 
+                                     defaultButton=QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.No:
+                self.sign_btn.setEnabled(True)
+                return
+        tx.sign(self.wh.active_sk)
+        asyncio.create_task(self.submit_tx(tx))
+        self.sign_btn_cooldown.start(self.sign_btn_cooldown_dur)
+
+    async def submit_tx(self, tx):
+        self.setDisabled(True)
+        status, msg = await self.nc.submit_tx(tx)
+        if not status:
+            self.display_error(f"Error submitting Tx: {msg}")
+        else:
+            self.display_error()
+        self.wh.del_all_outputs()
+        self.load_output_list()
+        self.setDisabled(False)
+
     #Utility Functions
     def change_wallet(self):
         self.setDisabled(True)
@@ -147,25 +230,8 @@ class DsCoinClient(DsCoinUI):
         self.load_input_list()
         self.load_output_list()
         self.update_qotd()
+        self.refresh_inputs()
         self.setDisabled(False)
-
-    def update_tx_data(self):
-        self.output_total = 0
-        self.input_total = 0
-        for row in range(self.output_tx_list.rowCount()):
-            self.output_total += float(self.output_tx_list.item(row, 3).text())
-        self.output_amt_label.setText(f"{self.output_total:.4f}")
-        for row in range(self.input_tx_list.rowCount()):
-            if self.input_tx_list.item(row, 2).checkState() != Qt.CheckState.Checked:
-                continue
-            self.input_total += float(self.input_tx_list.item(row, 1).text())
-        self.input_amt_label.setText(f"{self.input_total:.4f}")
-        remainder = self.input_total - self.output_total
-        self.remainder_label.setText(f"{remainder:.4f}")
-        if remainder < 0:
-            self.remainder_label.setStyleSheet("color: crimson; font-weight: bold;")
-        else:
-            self.remainder_label.setStyleSheet("font-weight: bold;")
 
     def select_all_inputs(self):
         if not self.select_all_toggle:
@@ -182,22 +248,6 @@ class DsCoinClient(DsCoinUI):
             return
         self.error_label.setText(msg)
 
-    def update_qotd(self):
-        qotds = ["My wallet is like an onion—opening it makes me cry.",
-                "I tried to follow a budget, but it unfollowed me back.",
-                "How do you make a small fortune in finance? Start with a large one and invest wisely.",
-                "A bank is a place that will lend you money if you can prove that you don't need it.",
-                "If you think no one cares about you, try missing a couple of payments.",
-                "The easiest way for your children to learn about money is for you not to have any.",
-                "The trick is to stop thinking of it as 'your' money. \033[3m—IRS auditor\033[0m",
-                "Always borrow money from a pessimist. They'll never expect it back.",
-                "They say money talks, but mine just waves goodbye.",
-                "The safest way to double your money is to fold it over and put it in your pocket.",
-                "Money is the best deodorant.",
-                "What's the use of happiness? It can't buy you money.",]
-        idx = random.randint(0,len(qotds)-1)
-        self.qotd.setText(qotds[idx])
-   
         
 def main():
     #31d51de55b81e6a94cb97e066c79f4e5663ff15a9ffae6ae3bd6e23f7b0e8761fb0317e52fefdbfa7fd4caca83679c7208166de217bac83c037581947071ae67
@@ -223,12 +273,11 @@ def main():
         
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-
-    win = DsCoinClient(wh)
+    win = DsCoinClient(wh, nc)
     win.show()
     with loop:
         QTimer.singleShot(0, win.refresh_inputs)
         loop.run_forever()
 
 if __name__ == "__main__":
-    main()
+    main() 

@@ -195,9 +195,16 @@ class DsCoinUI(QMainWindow):
         wallet_layout.addLayout(wallet_layout_container2)
         self.wallet_tab.setLayout(wallet_layout)
         
+    def init_mine_tab(self):
+        pass
+
     def init_menu(self):
         self.change_wallet_btn = QPushButton(QIcon().fromTheme("user-available"), "")
+        self.change_wallet_btn.setToolTip("Change Wallets")
         self.change_wallet_btn.setStyleSheet("border: None;")
+        self.switch_node_btn = QPushButton(QIcon().fromTheme("applications-internet"), "")
+        self.switch_node_btn.setToolTip("Switch Nodes")
+        self.switch_node_btn.setStyleSheet("border: None;")
         logo = QLabel("DsCoin Client")
         logo.setStyleSheet(styleSheets.header1)
         self.qotd = QLabel("My wallet is like an onion—opening it makes me cry.")
@@ -206,8 +213,9 @@ class DsCoinUI(QMainWindow):
         menu_layout.addWidget(logo)
         menu_layout.addWidget(self.qotd)
         menu_layout.addStretch()
-        menu_layout.addWidget(QLabel("Change Wallet"))
+        # menu_layout.addWidget(QLabel("Change Wallet"))
         menu_layout.addWidget(self.change_wallet_btn)
+        menu_layout.addWidget(self.switch_node_btn)
         self.menu.setLayout(menu_layout)
         self.menu.setObjectName("menu")
         self.menu.setStyleSheet("QWidget#menu { background-color: #173F5F ;}")

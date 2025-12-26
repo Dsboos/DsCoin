@@ -65,6 +65,21 @@ class Tx():
         success(f"[{self}] Added input {TxI}!")
         return True
     
+    def add_output(self, TxO):
+        #Basic Verification before adding outputs, detailed verification happens at blockchain level
+        if TxO.sndr != self.sndr: 
+            fail(f"[{self}] Input {TxO} not added: Not by user!")
+            return False
+        #Check if amount is greater than zero
+        if TxO.amt <= 0:
+            fail(f"[{self}] Output {TxO} not added: Amount less than or equal to Zero!")
+            return False
+        #Add the output to the outputs list
+        self.outputs_amt += TxO.amt
+        self.outputs.append(TxO)
+        success(f"[{self}] Added output {TxO}!")
+        return True
+
     def create_output(self, rcvr, amt, name="unnamed_output"):
         #Check if amount is greater than zero
         if amt <= 0:
@@ -127,7 +142,7 @@ def verify_signature(pk, hash, signature):
         return False
 
 #A general Tx verification tool that is trusted by blocks and blockchain
-def verify_Tx(Tx):
+def verify_Tx(Tx, blockless=False):
     try:    #Malicious or invalid classes may throw errors
         #1.1- Check if the Tx is lying about its hash
         if Tx.hash != hashlib.sha256(hash_info(Tx).encode()).hexdigest():
@@ -156,15 +171,24 @@ def verify_Tx(Tx):
             warn(f"[Tx Verification] {Tx} has specified incorrect input total: Actual- {TxI_total} DSC, Specified- {Tx.inputs_amt} DSC")
             return False
 
+        #1.4- RECENT: This check is to reject ghost transactiosn where there are no inputs nor outputs
+        if TxI_total == 0:
+            warn(f"[Tx Verification] {Tx} has no inputs! It is a ghost transaction!")
+            return False
+
         #2.1- Get the transaction fee if any
         Tx_fee = 0
         if Tx.Tx_fee:
             Tx_fee = Tx.Tx_fee.amt
 
         #2.2- Check if total input is equal to all outputs (incl. Tx fee)
-        if TxI_total != (TxO_total + Tx_fee):
+        if TxI_total != (TxO_total + Tx_fee) and not blockless: #Exclude the balance check for blockless txs(they dont have tx fees attached)
             warn(f"[Tx Verification] {Tx} has unbalanced inputs and outputs!")
             return False
+        else: 
+            if TxI_total < TxO_total:
+                warn(f"[Tx Verification] {Tx} has a higher output amount than input!")
+                return False
         
         #3- Finally verify the Tx signature
         if not verify_signature(Tx.sndr, Tx.hash, Tx.signature):
