@@ -8,6 +8,7 @@ import pickle
 
 HOST = "localhost"
 PORT = 8000
+MAX_FILE_SIZE = 10240000 #10MB
 db_lock = asyncio.Lock()
 
 class Node():
@@ -32,12 +33,14 @@ class Node():
             if not block_data:
                 writer.write(b"[invalid_request]")
                 await writer.drain()
+                writer.close()
                 warn2(f"[Network] {client_addr}:{client_port}'s request was closed: Invalid block data!")
                 return 
             wasAdded = await self.add_block(block_data)
             if wasAdded:
                 writer.write(b"[block_accepted]")
                 await writer.drain()
+                writer.close()
                 #Delete all txs associated with this block from mempool
                 for tx in pickle.loads(block_data).Tx_list:
                     mp.del_tx(tx)
@@ -54,6 +57,9 @@ class Node():
                 return
             await self.serve_utxos(pks, reader, writer)
             info2(f"[Network] {client_addr}:{client_port} was served UTxOs as per request!")
+        elif header == "[mempool_fetch_request]":
+            await self.serve_mempool(reader, writer)
+            info2(f"[Network] {client_addr}:{client_port} was served copy of mempool as per request!")
         elif header == "[tx_submission_request]":
             txb = await self.get_tx(reader, writer)
             if not txb:
@@ -77,6 +83,7 @@ class Node():
             warn2(f"[Network] {client_addr}:{client_port}'s request was denied: Invalid request!")
             writer.write(b"[invalid_request]")
             await writer.drain()
+            writer.close()
 
     #UTXO fetch request handling
     async def serve_utxos(self, pks, reader, writer):
@@ -98,7 +105,7 @@ class Node():
                 warn2(f"[Network] Failed to get client's pk: Client closed connection!")
                 return False
             pks += chunk
-            if len(pks) > 102400:       #Check if request is getting too long (more than 100kb)
+            if len(pks) > MAX_FILE_SIZE:       #Check if request is getting too long (more than 100kb)
                 writer.write(b"[request_denied]")
                 await writer.drain()
                 warn2(f"[Network] Failed to get client's pk: Request size limit exhausted!")
@@ -116,7 +123,7 @@ class Node():
                 warn2(f"[Network] Failed to get block data: Client closed connection!")
                 return False
             block_data += chunk
-            if len(block_data) > 102400:    #Check if request is getting too long (more than 100kb)
+            if len(block_data) > MAX_FILE_SIZE:    #Check if request is getting too long (more than 100kb)
                 writer.write(b"[request_denied]")
                 await writer.drain()
                 warn2(f"[Network] Failed to get block data: Request size limit exhausted!")
@@ -134,6 +141,16 @@ class Node():
             warn2(f"[Network] Submitted block was rejected by chain!")
             return False
 
+    #Mempool fetch request handling
+    async def serve_mempool(self, reader, writer):
+        query = mp.get_pending()
+        queryb = pickle.dumps(query)
+        writer.write(b"[get_ready]")
+        await writer.drain()
+        await reader.read(1024)         #Get ready for client to recieve the query
+        writer.write(queryb + b"[end_request]")
+        await writer.drain()
+
     #Tx submission request handling
     async def get_tx(self, reader,writer):
         txb = b""
@@ -145,7 +162,7 @@ class Node():
                 warn2(f"[Network] Failed to get tx: Client closed connection!")
                 return False
             txb += chunk
-            if len(txb) > 102400:       #Check if request is getting too long (more than 100kb)
+            if len(txb) > MAX_FILE_SIZE:       #Check if request is getting too long (more than 1mb)
                 writer.write(b"[request_denied]")
                 await writer.drain()
                 warn2(f"[Network] Failed to get tx: Request size limit exhausted!")

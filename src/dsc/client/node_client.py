@@ -7,6 +7,7 @@ class NodeClient():
         self.host = HOST
         self.port = PORT
 
+    #Fetching Methods
     async def fetch_utxos(self, pks):
         info2("[Node Client] utxo fetch request initiated...")
         try:
@@ -54,6 +55,46 @@ class NodeClient():
         query = pickle.loads(queryb[:-13])
         return query, None
     
+    async def fetch_mempool(self):
+        info2("[Node Client] mempool fetch request initiated...")
+        try:
+            reader, writer = await asyncio.open_connection(self.host, self.port)
+        except:
+            warn2(f"[Node Client] Couldn't fetch mempool: couldn't connect to node!")
+            return False, "Couldn't connect to node."
+
+        #Requesting permission with header:
+        writer.write(b"[mempool_fetch_request]")
+        await writer.drain()
+
+        #Wait for signal from node to get ready for data stream
+        chunk = b""
+        status = b""
+        while True:
+            chunk = await reader.read(1024)
+            if not chunk:
+                warn2(f"[Node Client] Couldn't fetch mempool: Server closed connection!")
+                return False, "Server closed connection."
+            status += chunk
+            if b"[get_ready]" in status:
+                break
+        
+        #Accept the data stream
+        writer.write(b"[ready]")
+
+        #Record the data stream
+        chunk = b""
+        queryb = b""
+        while queryb[-13:] != b"[end_request]":
+            chunk = await reader.read(1024)
+            if not chunk:
+                warn2(f"[Node Client] Couldn't fetch mempool: Server closed connection!")
+                return False, "Server closed connection."
+            queryb += chunk
+        query = pickle.loads(queryb[:-13])
+        return query, None
+    
+    #Submission Methods
     async def submit_block(self, block):
         info2("[Node Client] Block submission request initiated...")
         try:

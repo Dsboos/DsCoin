@@ -3,6 +3,7 @@ from dsc.common.prettyprint import warn, fail, success, info
 from dsc.common.transactions import TxO, Tx
 from dsc.common.blocks import Block, CBTx
 from dsc.client.wallet_handler import WalletHandler
+from dsc.client.mining_handler import MiningHandler
 from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI
@@ -17,7 +18,7 @@ import random, sys, pickle, ecdsa, asyncio
 
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, wh: WalletHandler, nc: NodeClient):
+    def __init__(self, wh: WalletHandler, mh: MiningHandler, nc: NodeClient):
         super().__init__()
 
         #Button Cooldowns
@@ -28,38 +29,40 @@ class DsCoinClient(DsCoinUI):
         self.sign_btn_cooldown_dur = 3000 # 3 second cooldown
         
         #Connections
+        #Wallet Tab
         self.change_wallet_btn.clicked.connect(self.change_wallet)
-
         self.add_btn.clicked.connect(self.add_output)
         self.remainder_btn.clicked.connect(self.add_remainder)
-
         self.del_tx_btn.clicked.connect(self.del_tx)
         self.clear_btn.clicked.connect(self.clear_output_form)
-
-        self.refresh_btn.clicked.connect(self.refresh_inputs)
-
+        self.refresh_btn.clicked.connect(self.update_inputs)
         self.select_all_btn.clicked.connect(self.select_all_inputs)
         self.input_tx_list.itemChanged.connect(self.update_tx_data)
-
         self.sign_btn.clicked.connect(self.compile_tx)
+        #Mine Tab
+        self.refresh_mempool_btn.clicked.connect(self.update_mempool)
 
         #Application variables
         self.output_total = 0
         self.input_total = 0
         self.select_all_toggle = False
 
-        #Wallet Handler
+        #Handlers
         self.wh = wh
-        #Node Client
+        self.mh = mh
         self.nc = nc
 
         #initial function calls
         self.load_output_list()
         self.display_error()
+        self.display_error_m()
         self.update_qotd()
 
     #Update Functions
-    async def update_inputs(self):
+    def update_inputs(self):
+        asyncio.create_task(self.inputs_fetcher())
+  
+    async def inputs_fetcher(self):
         self.setDisabled(True)
         status, msg = await self.wh.update_inputs()
         if not status and not msg:
@@ -68,12 +71,26 @@ class DsCoinClient(DsCoinUI):
             self.display_error(f"Couldn't fetch inputs: {msg}")
         else:
             self.display_error()
+            info("[Client] Updated Inputs!")
         self.load_input_list()
         self.setDisabled(False)
     
-    def refresh_inputs(self):
-        asyncio.create_task(self.update_inputs())
-        info("[Client] Updated Inputs!")
+    def update_mempool(self):
+        asyncio.create_task(self.mempool_fetcher())
+
+    async def mempool_fetcher(self):
+        self.setDisabled(True)
+        query, msg = await self.nc.fetch_mempool()
+        if query:
+            self.mh.load_pending(query)
+            info(f"Updated Mempool")
+            self.display_error_m()
+        elif not msg:
+            self.display_error_m(f"Mempool is currently all empty :)")
+        else:
+            self.display_error_m(f"Couldn't fetch mempool: {msg}")
+        self.load_mempool()
+        self.setDisabled(False)
 
     def update_tx_data(self):
         self.output_total = 0
@@ -176,6 +193,23 @@ class DsCoinClient(DsCoinUI):
         self.input_tx_list.blockSignals(False)
         self.update_tx_data()
 
+    def load_mempool(self):
+        self.mempool_list.blockSignals(True)
+        self.mempool_list.clearContents()
+        self.mempool_list.setRowCount(0)
+        row = 0
+        query = self.mh.get_pending()
+        for tx in query:
+            self.mempool_list.insertRow(row)
+            self.mempool_list.setItem(row, 0, QTableWidgetItem(tx[1]))
+            self.mempool_list.setItem(row, 1, QTableWidgetItem(str(tx[2])))
+            checkbox_itm = QTableWidgetItem()
+            checkbox_itm.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            checkbox_itm.setCheckState(Qt.CheckState.Unchecked)
+            self.mempool_list.setItem(row, 2, checkbox_itm)     
+            row += 1 
+        self.mempool_list.blockSignals(False)          
+
     #Submission Functions
     def compile_tx(self):
         self.sign_btn.setEnabled(False)
@@ -230,7 +264,7 @@ class DsCoinClient(DsCoinUI):
         self.load_input_list()
         self.load_output_list()
         self.update_qotd()
-        self.refresh_inputs()
+        self.update_inputs()
         self.setDisabled(False)
 
     def select_all_inputs(self):
@@ -247,6 +281,12 @@ class DsCoinClient(DsCoinUI):
             self.error_label.setText("")
             return
         self.error_label.setText(msg)
+
+    def display_error_m(self, msg=None):
+        if not msg:
+            self.mine_error_label.setText("")
+            return
+        self.mine_error_label.setText(msg)
 
         
 def main():
@@ -265,18 +305,22 @@ def main():
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
+
     nc = NodeClient(HOST, PORT)
     wh = WalletHandler(nc)
+    mh = MiningHandler()
+
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:
         exit(1)
         
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-    win = DsCoinClient(wh, nc)
+    win = DsCoinClient(wh, mh, nc)
     win.show()
     with loop:
-        QTimer.singleShot(0, win.refresh_inputs)
+        QTimer.singleShot(0, win.update_inputs)
+        QTimer.singleShot(0, win.update_mempool)
         loop.run_forever()
 
 if __name__ == "__main__":
