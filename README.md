@@ -19,7 +19,7 @@ This is the first dialog you will come across when launching the application. It
 >
 > You cannot create a wallet in the application. Instead you must generate one yourself using third-party applications.\
 > A wallet is in essence is just a public/private key pair. You can generate a pair for yourself on free online sites. A good site I use myself is:\
-> https://emn178.github.io/online-tools/ecdsa/key-generator/\
+> https://emn178.github.io/online-tools/ecdsa/key-generator/ \
 > Make sure you generate a **SECP256K1** Key in **Hex**. If you are confused as to what that is, it means that your key-pair must look something like this:
 >
 > ```
@@ -382,14 +382,6 @@ None
 
 2- Add auto snapshot at every n blocks feature
 
-3- Create user client, integrate transaction creation into UI, and implement client UTxO fetching
+3- Display copy of blockchain through a visual GUI in clients
 
-4- Create a miner client with block mining UI, and implement local mempool
-
-5- Display copy of blockchain through a visual GUI in clients
-
-6- Create node client with mempool and blockchain copy.
-
-7- Connect user clients, miner clients with nodes: node mempool updates local miner mempools, node blockchain updates clients' copies
-
-8- Create a chain verification tool that scans and verifies entire specified segment of chain.
+4- Create a chain verification tool that scans and verifies entire specified segment of chain.
