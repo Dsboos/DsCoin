@@ -28,7 +28,7 @@ class Node():
         peer = writer.get_extra_info("peername")
         client_addr, client_port = peer[:2]
         info2(f"[Network] New request from: {client_addr}:{client_port} | {header}")
-        if header == "[block_submission_request]":
+        if   header == "[block_submission_request]":
             block_data = await self.get_block_data(reader, writer)
             if not block_data:
                 writer.write(b"[invalid_request]")
@@ -49,17 +49,6 @@ class Node():
                 writer.write(b"[block_rejected]")
                 await writer.drain()
                 warn2(f"[Network] {client_addr}:{client_port}'s block submission was rejected!")
-        elif header == "[utxos_fetch_request]":
-            pks = await self.get_client_pks(reader, writer)
-            if not pks:
-                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: Invalid Public Key!")
-                writer.close()
-                return
-            await self.serve_utxos(pks, reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served UTxOs as per request!")
-        elif header == "[mempool_fetch_request]":
-            await self.serve_mempool(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of mempool as per request!")
         elif header == "[tx_submission_request]":
             txb = await self.get_tx(reader, writer)
             if not txb:
@@ -79,6 +68,20 @@ class Node():
             writer.close()
             mp.add_tx(pickle.loads(txb))
             info2(f"[Network] {client_addr}:{client_port}'s tx submission was added to mempool!")
+        elif header == "[utxos_fetch_request]":
+            pks = await self.get_client_pks(reader, writer)
+            if not pks:
+                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: Invalid Public Key!")
+                writer.close()
+                return
+            await self.serve_utxos(pks, reader, writer)
+            info2(f"[Network] {client_addr}:{client_port} was served UTxOs as per request!")
+        elif header == "[mempool_fetch_request]":
+            await self.serve_mempool(reader, writer)
+            info2(f"[Network] {client_addr}:{client_port} was served copy of mempool as per request!")
+        elif header == "[chainstate_fetch_request]":
+            await self.serve_chainstate(reader, writer)
+            info2(f"[Network] {client_addr}:{client_port} was served copy of chain state as per request!")
         else:
             warn2(f"[Network] {client_addr}:{client_port}'s request was denied: Invalid request!")
             writer.write(b"[invalid_request]")
@@ -148,6 +151,16 @@ class Node():
         writer.write(b"[get_ready]")
         await writer.drain()
         await reader.read(1024)         #Get ready for client to recieve the query
+        writer.write(queryb + b"[end_request]")
+        await writer.drain()
+
+    #Chainstate fetch request handling
+    async def serve_chainstate(self, reader, writer):
+        query = bc.fetch_chainstate()
+        queryb = pickle.dumps(query)
+        writer.write(b"[get_ready]")
+        await writer.drain()
+        await reader.read(1024)         #Get ready signal from client to recieve the query
         writer.write(queryb + b"[end_request]")
         await writer.drain()
 

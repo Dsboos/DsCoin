@@ -1,4 +1,160 @@
-# Naming Convention:
+# **DsCoin Client**
+
+The client is a UI-based application that handles the following activities:
+
+1. Creation and Submission of Transactions
+2. Creation of Blocks
+3. Mining and Submission of Blocks
+
+These three can further be subdivided into many more sub-categories, such as: UTxO Viewing, CoinBase Addition, Blockchain Status, etc.\
+The next few topics discuss how the client app works and how to use it correctly.
+
+## 1. Logging In
+
+This is the first dialog you will come across when launching the application. It is the entrypoint of the client workspace, and where you must either first add a wallet or select an already added one.
+
+![alt text](project_photos/login_dialog.png)
+
+> ### How to Create a Wallet:
+>
+> You cannot create a wallet in the application. Instead you must generate one yourself using third-party applications.\
+> A wallet is in essence is just a public/private key pair. You can generate a pair for yourself on free online sites. A good site I use myself is:\
+> https://emn178.github.io/online-tools/ecdsa/key-generator/\
+> Make sure you generate a **SECP256K1** Key in **Hex**. If you are confused as to what that is, it means that your key-pair must look something like this:
+>
+> ```
+> Private Key:
+> 4c847b1984be5e3339c9386fa026c596bb799c121dea73a30d6cb28fe44414c9
+>
+> Public Key:
+> 04eeee76c4535c4c48f64c5c6cf7811ddb67c4b6dbee22d3b313f124deea127339a212a791ca1ac11dfe00b26b9edac53fb43c6c4d28bbecc3460a676f510428ba
+> ```
+>
+> _Remember, the public key is always longer than the private key._\
+> The public key generated is now _your_ identity in the coin world. Any payments made will be made to this sequence of characters. The private key, on the other hand, is the password that gives you access to use the public key. Always keep this key safe, secure and, most importantly, hidden from others. Since everyone already knows your public key (hence the name), all that stands between your wallet and the world is your private key.
+
+Once you have a wallet to add, you can fill the details into the fields and click on add wallet.
+
+> Naming your wallets is optional, but it is best practice to do so as it soon becomes very difficult to differentiate between multiple wallets based on their key sequences.
+
+![alt text](project_photos/login_dialog_filled.png)
+
+Once you've added a wallet, you can click on it in the wallets list to select it, and login using the login button.
+
+![alt text](project_photos/login_dialog_loggingin.png)
+
+## 2. My Wallet
+
+The first thing you see after logging in to your wallet is the My Wallet tab. This is where you create transactions and view your UTxOs.
+
+![alt text](project_photos/my_wallet.png)
+
+The UI may seem daunting at first but there are just four main elements that you need to understand to use your wallet:
+
+1. **Output Transactions:** The list of all transactions you make out (send coins to others)
+2. **Input Transactions:** The list of all transactions that were made out to you, and you haven't spent (UTxOs)
+3. **Create Transaction Output:** The form where you fill out the output details
+4. **Transaction Data:** The totals of your outputs, inputs and their remainder
+
+> ### How Transactions work:
+>
+> Transactions in crypto work a little bit differently than in traditional banking systems. Instead of a balance that exists as a number under your account name, in crypto there are **Unspent Transaction Outputs** (UTxO).\
+> Anytime someone pays somebody else, they create an output (think of it as them outputting coins). That output exists on the blockchain as an _Unspent Transaction Output_. This means that the person who recieved those coins in the output, can use this output to pay others.\
+> They can do that by adding this UTxO as an 'input' to their own transaction. After that, they can create new outputs to other people, using these inputs as a backing.\
+> Once they've used an UTxO as an input, they can never use it again, and it becomes 'spent'. Here's a quick example:
+>
+> ```
+> Mei's Transaction:
+>   Inputs:
+>       1. Some UTxO (Assume)
+>   Outputs:
+>       1. Pay Chen, 20 DsC
+> ```
+>
+> Chen now has one UTxO to his name (you can say he has 20 DsC to his name). He can now use it to pay someone else by using it as an input:
+>
+> ```
+> Chen's Transaction:
+>   Inputs:
+>       1. Mei's Transaction, Output no. 1, 20 DsC (the UTxO)
+>   Outputs:
+>       1. Pay for Lobotomy, 20 DsC
+> ```
+>
+> Chen can not use the UTxO again now. He can also never output a higher amount than his input.\
+> Additionally, Chen can also add multiple inputs from different senders to create a larger output:
+>
+> ```
+> Chen's Transaction (redo):
+>   Inputs:
+>       1. Mei's Transaction, Output no. 1, 20 DsC
+>       2. Dad's Transaction, Output no. 3, 20 DsC (Assume)
+>       3. Mom's Transaction, Output no. 2, 80 dSc (Assume)
+>   Outputs:
+>       1. Pay for Better Lobotomy, 120 DsC
+> ```
+>
+> If Chen outputs less than his inputs total to, the remainder gets paid to Block Miners as fees (more on this later). If his inputs don't amount exactly to his outputs, he can add an output to himself for that amount.
+>
+> ```
+> Chen's Transaction (redo 2):
+>   Inputs:
+>       1. Mei's Transaction, Output no. 1, 20 DsC
+>       2. Dad's Transaction, Output no. 3, 20 DsC (Assume)
+>       3. Mom's Transaction, Output no. 2, 80 dSc (Assume)
+>   Outputs:
+>       1. Pay Lobotomy Cancellation Fees, 110 DsC
+>       2. Pay Chen, 10 DsC (remainder)
+> ```
+>
+> To create a transaction, you must create your outputs. This is where you specify who you wish to pay, and how much. You may add as many outputs to as many people as you wish, but you must have sufficient inputs to back them up.\
+> Enter the details of your output in the form to create an output:
+
+1. Recipient's address (their public key)
+2. Amount (in DsC)
+3. Output name (optional, but best practice)
+
+![alt text](project_photos/my_wallet_create_output.png)
+
+You can now view your output in the outputs list.
+
+![alt text](project_photos/my_wallet_output_list.png)
+
+Next, you must add the necessary inputs to back your outputs. First refresh the inputs list to get your latest UTxOs:
+
+![alt text](project_photos/my_wallet_refresh_inputs.png)
+
+> **IMPORTANT:** You must be connected to a node in order to load your latest UTxOs.
+
+Next, select the checkbox on the UTxOs you want to select. You can use the Select All button to select all UTxOs if you don't have that many (if you're broke).\
+You can also see the total of all selected UTxOs below the list.
+
+![alt text](project_photos/my_wallet_select_input.png)
+
+The Transaction data below shows you the totals of your outputs and inputs. It also shows the remainder. If remainder is negative, you must add more inputs, or your transaction is invalid.
+
+![alt text](project_photos/my_wallet_tx_data.png)
+
+If you wish to pay off the remainder as fees to the miner, you may submit the transaction as is. However, if you want your money back, you can click on the Add Remainder button to create an output that pays yourself the amount.
+
+![alt text](project_photos/my_wallet_remainder.png)
+
+Once everything is confirmed, you can finally sign and submit the transaction to the blockchain by clicking on the Submit button.
+
+![alt text](project_photos/my_wallet_submit_tx.png)
+
+> **IMPORTANT:** You must be connected to a node to submit transactions.
+
+---
+
+---
+
+# **Behind the Scenes**
+
+This is how the coin works behind the scenes, from transaction handling to block mining and blockchain management. You can use the modules mentioned below to test it out for yourself.\
+The transactions and blocks module exists in the common\ directory, and the blockchain module itself lives in the node\ directory.
+
+## Naming Convention:
 
 Public Key = **pk**\
 Private Key = **sk**\
@@ -16,7 +172,7 @@ Coin Base Transaction: **CBTx** _(sometimes **CBTxO**)_
 
 Block Hash = **blockh**
 
-# 0. Hashes & Hash Info
+## 0. Hashes & Hash Info
 
 > Knowing about hashes and hash infos is a prerequisite to understanding how hashes are used in this project. This is a brief overview of that
 
@@ -54,7 +210,7 @@ Block Hash = **blockh**
 > As an example, a Tx may display a valid hash signed by Fang, but contain attributes declaring a payment from Lianhua to Haoyun, all without Lianhua's consent.If just a simple hash existence check, and signature verification were implemented, such a malicious transaction would pass.\
 > Therefore, it is imperative that an independent (not under the control of the object) and incorruptible (not able to be manipulated by external inputs) function is created to read all the attributes of the object, compile its hash info, hash that info, and finally compare it with the hash the object claims.
 
-# 1. Transactions
+## 1. Transactions
 
 ## CLASS: **TxO**( _sndr, rcvr, amt_ )
 

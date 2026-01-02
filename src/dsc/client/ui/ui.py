@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QPlainT
                                QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
                                QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
                                QMessageBox, QDoubleSpinBox, QStyle, QMainWindow, QAbstractItemView,
-                               QSpinBox)
+                               QSpinBox, QDialog, QComboBox)
 from PySide6.QtCore import Qt, QLocale, QSize
 from PySide6.QtGui import QDoubleValidator, QIcon, QAction
 import qdarktheme
@@ -13,7 +13,7 @@ class DsCoinUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DsCoin Client v0.1.0")
-        self.setWindowIcon(QIcon("src\\dsc\\ui\\assets\\icons\\logo.png"))
+        self.setWindowIcon(QIcon("src\\dsc\\client\\ui\\assets\\icons\\logo.png"))
         self.resize(1080, 720)
         self.setMinimumSize(920, 600)
 
@@ -199,8 +199,39 @@ class DsCoinUI(QMainWindow):
         
     def init_mine_tab(self):
         #============================================UI Elements============================================
-        self.add_tx_label = QLabel("Add Transactions")
-        self.add_tx_label.setStyleSheet(styleSheets.header2)
+        self.preview_box = QGroupBox("Block Preview")
+        self.preview_label = QLabel("Block Preview")
+        self.preview_label.setStyleSheet(styleSheets.header2)
+
+        self.block_name = QLabel("---")
+        self.block_name.setStyleSheet("font-weight: bold;")
+        self.block_name.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.block_nonce = QLabel("---")
+        self.block_nonce.setStyleSheet("font-weight: bold;")
+        self.block_diff = QLabel("---")
+        self.block_diff.setStyleSheet("font-weight: bold;")
+        self.block_limit = QLabel("---")
+        self.block_limit.setStyleSheet("font-weight: bold;")
+        self.block_prev = QLabel("---")
+        self.block_prev.setStyleSheet("font-weight: bold;")
+        self.block_reward = QLabel("---")
+        self.block_reward.setStyleSheet("font-weight: bold;")
+        self.block_mine_status = QLabel("---")
+        self.block_mine_status.setStyleSheet("font-weight: bold;")
+
+        self.block_tx_list = QPlainTextEdit()
+        self.block_tx_list.setReadOnly(True)
+        self.block_cbtx_list = QPlainTextEdit()
+        self.block_cbtx_list.setReadOnly(True)
+
+        self.create_block_btn = QPushButton("Create Block")
+        self.create_block_btn.setStyleSheet(styleSheets.good_btn)
+        self.del_block_btn = QPushButton("Delete Block")
+        self.del_block_btn.setStyleSheet(styleSheets.bad_btn)
+        self.edit_block_btn = QPushButton("Edit Details")
+
+        self.mempool_label = QLabel("Mempool")
+        self.mempool_label.setStyleSheet(styleSheets.header2)
 
         self.select_limit_btn = QPushButton("Select Limit")
         self.select_limit_btn.setMaximumWidth(100)
@@ -229,6 +260,8 @@ class DsCoinUI(QMainWindow):
         self.cb_name_field = QLineEdit(placeholderText="Enter Name")
         self.cb_name_field.setMaxLength(18)
         self.cb_name_field.setFixedWidth(180)
+        self.cb_pk_field = QPlainTextEdit(placeholderText="Enter Reciever Key")
+        self.cb_pk_field.setMaximumHeight(50)
         self.cb_amt_field = QDoubleSpinBox()
         self.cb_amt_field.setRange(0.0, 1000000.0)
         self.cb_amt_field.setDecimals(4)
@@ -240,73 +273,42 @@ class DsCoinUI(QMainWindow):
         self.add_cb_btn.setStyleSheet(styleSheets.good_btn)
         self.add_cb_btn.setMaximumWidth(100)
 
-        self.details_label = QLabel("Block Details")
-        self.details_label.setStyleSheet(styleSheets.header2)
-
-        self.block_name_field = QLineEdit(placeholderText="Enter Name")
-        self.block_name_field.setMaxLength(18)
-        self.block_name_field.setFixedWidth(180)
-        self.prev_field = QLineEdit(placeholderText="Enter Previous Hash")
-        self.prev_field.setMaximumWidth(450)
-
-        self.reward_field = QDoubleSpinBox()
-        self.reward_field.setRange(0.0, 1000000.0)
-        self.reward_field.setDecimals(4)
-        self.reward_field.setValue(64.0)
-        self.reward_field.setMaximumWidth(150)
-
-        self.diff_field = QSpinBox()
-        self.diff_field.setRange(0, 64)
-        self.diff_field.setValue(3)
-        self.diff_field.setMaximumWidth(150)
-
-        self.load_details_btn = QPushButton("Load Details")
-        self.load_details_btn.setMaximumWidth(100)
-
         self.mine_label = QLabel("Mine Block")
         self.mine_label.setStyleSheet(styleSheets.header2)
 
-        self.seq_field = QSpinBox()
+        self.seq_field = QLineEdit()
         self.seq_field.setMaximumWidth(150)
+        self.seq_field.setReadOnly(True)
 
         self.hash_field = QLineEdit()
-        self.hash_field.setMaximumWidth(450)
-        self.hash_field.setEnabled(False)
-        self.hash_field.setText("No Hash")
-
-        self.hash_btn = QPushButton("Hash")
+        self.hash_field.setMinimumWidth(450)
+        self.hash_field.setReadOnly(True)
         
-        self.mine_btn = QPushButton("Mine")
+        self.mine_btn = QPushButton("Mine Block")
         self.mine_btn.setStyleSheet(styleSheets.good_btn)
         self.mine_btn.setMaximumWidth(100)
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setStyleSheet(styleSheets.bad_btn)
+        self.cancel_btn.setMaximumWidth(100)
+        self.cancel_btn.hide()
 
         self.submit_btn = QPushButton("Submit Block")
         self.submit_btn.setFixedSize(200, 50)
         self.submit_btn.setStyleSheet(styleSheets.big_btn + styleSheets.good_btn)
         self.submit_btn.setIconSize(QSize(20, 20))
 
+        self.mine_preset_menu = QComboBox()
+        self.mine_preset_menu.addItems(["Potato", "Low", "Medium", "High", "Ultra"])
+        self.mine_preset_menu.setCurrentIndex(2)
+        self.mine_preset_menu.setPlaceholderText("Select Preset")
+
         #============================================Layouts============================================
         mine_layout = QHBoxLayout()
         mine_layout.setContentsMargins(30, 20, 30, 20)
         mine_layout.setSpacing(20)
 
-        #---------Mempool Selection START---------
         mine_layout_container1 = QVBoxLayout()
         mine_layout_container1.setSpacing(10)
-
-        header1 = QHBoxLayout()
-        header1.addWidget(self.add_tx_label)
-        header1.addStretch()
-        header1.addWidget(self.refresh_mempool_btn)
-        header1.addWidget(self.select_limit_btn)
-
-        mine_layout_container1.addLayout(header1)
-        mine_layout_container1.addWidget(self.mempool_list)
-        mine_layout_container1.addWidget(self.mine_error_label)
-        #---------Mempool Selection END---------
-        
-        mine_layout_container2 = QVBoxLayout()
-        mine_layout_container2.setSpacing(10)
 
         #---------Coin Base Form START---------
         cb_form = QFormLayout()
@@ -322,63 +324,115 @@ class DsCoinUI(QMainWindow):
         amt_container.addWidget(QLabel("DsCoins"))
 
         cb_form.insertRow(2, "Amount:", amt_container)
-        cb_form.insertRow(3, "Password:", self.cb_password_field)
-
-        cb_form.setWidget(4, QFormLayout.ItemRole.FieldRole, self.add_cb_btn)
+        cb_form.insertRow(3, "Reciever's Key:", self.cb_pk_field)
+        cb_form.insertRow(4, "Password:", self.cb_password_field)
+        cb_form.setWidget(5, QFormLayout.ItemRole.FieldRole, self.add_cb_btn)
         #---------Coin Base Form END---------
+
+        mine_layout_container1.addLayout(cb_form, 1)
+
+        #---------Mempool Selection START---------
+        header1 = QHBoxLayout()
+        header1.addWidget(self.mempool_label)
+        header1.addStretch()
+        header1.addWidget(self.refresh_mempool_btn)
+        header1.addWidget(self.select_limit_btn)
+
+        mine_layout_container1.addLayout(header1)
+        mine_layout_container1.addWidget(self.mempool_list, 2)
+        mine_layout_container1.addWidget(self.mine_error_label)
+        #---------Mempool Selection END---------
         
-        mine_layout_container2.addLayout(cb_form)
-        mine_layout_container2.addStretch()
+        mine_layout_container2 = QVBoxLayout()
+        mine_layout_container2.setSpacing(10)
 
-        #---------Block Details Form START---------
-        details_form = QFormLayout()
-        details_form.setSpacing(10)
-        details_form.setWidget(0, QFormLayout.ItemRole.SpanningRole, self.details_label)
-        header3 = QHBoxLayout()
-        header3.addWidget(self.block_name_field)
-        header3.addWidget(QLabel("(optional)"))
-        details_form.insertRow(1, "Block Name:", header3)
+        #---------Block Preview START---------
+        groupbox_container = QVBoxLayout()
+        groupbox_container.setContentsMargins(20, 10, 20, 10)
+
+        header_container = QHBoxLayout()
+        block_header = QLabel("Header:")
+        block_header.setStyleSheet(styleSheets.header3)
+        header_container.addWidget(block_header)
+        header_container.addStretch()
+        header_container.addWidget(self.create_block_btn)
+
+        groupbox_container.addLayout(header_container)
+        groupbox_container.addSpacing(10)
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("Block Name:"))
+        row1.addWidget(self.block_name)
+        row1.addStretch()
+        row1.addWidget(QLabel("Nonce:"))
+        row1.addWidget(self.block_nonce)
+        row1.addStretch() 
+        groupbox_container.addLayout(row1)
         
-        details_form.insertRow(2, "Previous Block:", self.prev_field)
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("Previous Block:"))
+        row2.addWidget(self.block_prev)
+        row2.addStretch()
+        groupbox_container.addLayout(row2)
+        
+        row3 = QHBoxLayout()
+        row3.addWidget(QLabel("Difficulty:"))
+        row3.addWidget(self.block_diff)
+        row3.addStretch()
+        row3.addWidget(QLabel("Reward:"))
+        row3.addWidget(self.block_reward)
+        row3.addStretch()
+        row3.addWidget(QLabel("Tx Limit:"))
+        row3.addWidget(self.block_limit)
+        row3.addStretch()
+        groupbox_container.addLayout(row3)
+        groupbox_container.addSpacing(10)
 
-        reward_container = QHBoxLayout()
-        reward_container.addWidget(self.reward_field)
-        reward_container.addWidget(QLabel("DsCoins"))
-        reward_container.addStretch()
-        reward_container.addWidget(QLabel("Difficulty:"))
-        reward_container.addWidget(self.diff_field)
+        block_body = QLabel("Body:")
+        block_body.setStyleSheet(styleSheets.header3)
+        groupbox_container.addWidget(block_body)
 
-        details_form.insertRow(3, "Reward:", reward_container)
-
-        details_form.setWidget(4, QFormLayout.ItemRole.FieldRole, self.load_details_btn)
-        #---------Block Details Form END---------
-
-        mine_layout_container2.addLayout(details_form)
-
-        #---------Mine Block START---------
-        mine_form = QFormLayout()
-        mine_form.setSpacing(10)
-        mine_form.setWidget(0, QFormLayout.ItemRole.SpanningRole, self.mine_label)
-        mine_form.insertRow(1, "Mine Sequence:", self.seq_field)
+        groupbox_container.addWidget(QLabel("Tx:"))
+        groupbox_container.addWidget(self.block_tx_list)
+        groupbox_container.addWidget(QLabel("CBTx:"))
+        groupbox_container.addWidget(self.block_cbtx_list)
 
         hash_container = QHBoxLayout()
+        hash_container.addWidget(QLabel("Block Hash:"))
         hash_container.addWidget(self.hash_field)
-        hash_container.addWidget(self.hash_btn)
-        mine_form.insertRow(2, "Block Hash:", hash_container)
+        hash_container.addStretch()
+        groupbox_container.addLayout(hash_container)
 
-        mine_form.setWidget(3, QFormLayout.ItemRole.FieldRole, self.mine_btn)
-        #---------Mine Block END---------
+        row4 = QHBoxLayout()
+        row4.addWidget(QLabel("Mine Sequence:"))
+        row4.addWidget(self.seq_field)
+        row4.addStretch()
 
-        mine_layout_container2.addLayout(mine_form)
+        groupbox_container.addLayout(row4)
+        groupbox_container.addSpacing(20)
+
+        create_container = QHBoxLayout()
+        create_container.addWidget(self.del_block_btn)
+        create_container.addStretch()
+        create_container.addWidget(self.mine_btn)
+        create_container.addWidget(self.cancel_btn)
+        groupbox_container.addLayout(create_container)
+
+        self.preview_box.setLayout(groupbox_container)
+        mine_layout_container2.addWidget(self.preview_box, 2)
+        #---------Block Preview END---------
+        
         submit_btn_container = QHBoxLayout()
+        submit_btn_container.addWidget(QLabel("Mining Preset:"))
+        submit_btn_container.addWidget(self.mine_preset_menu)
+        submit_btn_container.addWidget(QLabel("Status:"))
+        submit_btn_container.addWidget(self.block_mine_status)
         submit_btn_container.addStretch()
         submit_btn_container.addWidget(self.submit_btn)
         mine_layout_container2.addLayout(submit_btn_container)
 
-        mine_layout.addLayout(mine_layout_container1)
-        mine_layout.addLayout(mine_layout_container2)
+        mine_layout.addLayout(mine_layout_container1, 1)
+        mine_layout.addLayout(mine_layout_container2, 1)
         self.mine_tab.setLayout(mine_layout)
-
 
     def init_menu(self):
         self.change_wallet_btn = QPushButton(QIcon().fromTheme("user-available"), "")
@@ -401,7 +455,98 @@ class DsCoinUI(QMainWindow):
         self.menu.setLayout(menu_layout)
         self.menu.setObjectName("menu")
         self.menu.setStyleSheet("QWidget#menu { background-color: #173F5F ;}")
-       
+
+
+class CreateBlockUI(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.setWindowTitle("Block Details")
+        self.setWindowIcon(QIcon("src\\dsc\\client\\ui\\assets\\icons\\logo.png"))
+
+    def initUI(self):
+        self.details_label = QLabel("Block Details")
+        self.details_label.setStyleSheet(styleSheets.header2)
+
+        self.block_name_field = QLineEdit(placeholderText="Enter Name")
+        self.block_name_field.setMaxLength(18)
+        self.block_name_field.setFixedWidth(180)
+        self.prev_field = QLineEdit(placeholderText="Enter Previous Hash")
+        self.prev_field.setMaximumWidth(450)
+
+        self.reward_field = QDoubleSpinBox()
+        self.reward_field.setRange(0.0, 1000000.0)
+        self.reward_field.setDecimals(4)
+        self.reward_field.setValue(64.0)
+        self.reward_field.setMaximumWidth(150)
+
+        self.diff_field = QSpinBox()
+        self.diff_field.setRange(0, 64)
+        self.diff_field.setValue(3)
+        self.diff_field.setMaximumWidth(150)
+        
+        self.limit_field = QSpinBox()
+        self.limit_field.setRange(0, 16)
+        self.limit_field.setValue(5)
+        self.limit_field.setMaximumWidth(150)
+
+        self.load_details_btn = QPushButton(QIcon.fromTheme("emblem-downloads"), "")
+        self.load_details_btn.setMaximumWidth(100)
+        self.load_details_btn.setAutoDefault(False)
+
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setStyleSheet(styleSheets.good_btn)
+        self.save_btn.setMinimumWidth(100)
+        self.save_btn.clicked.connect(self.accept)
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setStyleSheet(styleSheets.bad_btn)
+        self.cancel_btn.setMinimumWidth(100)
+        self.cancel_btn.setAutoDefault(False)
+        self.cancel_btn.clicked.connect(self.reject)
+
+        #------------Layout-------------
+        self.setContentsMargins(20, 10, 20, 10)
+        main_layout = QVBoxLayout()
+
+        details_form = QFormLayout()
+        details_form.setSpacing(10)
+
+        header = QHBoxLayout()
+        header.addWidget(self.details_label)
+        header.addStretch()
+        header.addWidget(QLabel("Load Details from Node"))
+        header.addWidget(self.load_details_btn)
+        details_form.setLayout(0, QFormLayout.ItemRole.SpanningRole, header)
+
+        header3 = QHBoxLayout()
+        header3.addWidget(self.block_name_field)
+        header3.addWidget(QLabel("(optional)"))
+        header3.addStretch()
+        header3.addWidget(QLabel("Tx Limit:"))
+        header3.addWidget(self.limit_field)
+        details_form.insertRow(1, "Block Name:", header3)
+        
+        details_form.insertRow(2, "Previous Block:", self.prev_field)
+
+        reward_container = QHBoxLayout()
+        reward_container.addWidget(self.reward_field)
+        reward_container.addWidget(QLabel("DsCoins"))
+        reward_container.addStretch()
+        reward_container.addWidget(QLabel("Difficulty:"))
+        reward_container.addWidget(self.diff_field)
+
+        details_form.insertRow(3, "Reward:", reward_container)
+
+        main_layout.addLayout(details_form)
+        main_layout.addSpacing(20)
+        btn_container = QHBoxLayout()
+        btn_container.addWidget(self.cancel_btn)
+        btn_container.addStretch()
+        btn_container.addWidget(self.save_btn)
+        main_layout.addLayout(btn_container)
+        self.setLayout(main_layout)
+
 
 class styleSheets:
     big_btn = "QPushButton {font-size: 12pt; font-weight: bold; padding: 10px;}"

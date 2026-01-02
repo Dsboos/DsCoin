@@ -14,10 +14,24 @@ class MiningHandler():
                             tx_hash TEXT PRIMARY KEY,
                             fee REAL
                             )""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
+                            name TEXT,
+                            height INTEGER,
+                            rooth TEXT PRIMARY KEY,
+                            root BLOB,
+                            surface BLOB,
+                            difficulty INTEGER,
+                            tx_limit INTEGER,
+                            mine_reward INTEGER
+                            )""")
         self.conn.commit()
                             
     def get_pending(self):
         query = self.cursor.execute("SELECT * FROM pending").fetchall()
+        return query
+    
+    def get_tx_from_hash(self, hash):
+        query = self.cursor.execute("SELECT * FROM pending WHERE tx_hash = ?", (hash,)).fetchone()
         return query
     
     def load_pending(self, query):
@@ -25,6 +39,14 @@ class MiningHandler():
         for tx in query:
             self.cursor.execute("INSERT INTO pending VALUES(?, ?, ?)", tx)
     
+    def get_chainstate(self):
+        query = self.cursor.execute("SELECT * FROM blockchain").fetchone()
+        return query
+    
+    def load_chainstate(self, query):
+        self.cursor.execute("DELETE FROM blockchain")
+        self.cursor.execute("INSERT INTO blockchain VALUES (?, ?, ?, ?, ?, ?, ?, ?)", query)
+
     def get_data_directory(self):
         if getattr(sys, "frozen", False):
             root = Path(sys.executable).resolve().parent

@@ -9,7 +9,7 @@ import ecdsa
 
 #Coin Base Tx, types include: additions and miner_rewards. Additions are only authorized for testing and root block
 class CBTx():
-    def __init__(self, rcvr, amt, type="addition", name="unnamed_cbtx"):
+    def __init__(self, rcvr, amt, type="addition", name="unnamed_cbtx", password=None):
         #Nonce
         self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
         self.name = name
@@ -18,6 +18,7 @@ class CBTx():
         self.rcvr = rcvr
         self.amt = amt
         self.type = type
+        self.password = password
 
         self.hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
 
@@ -39,7 +40,7 @@ class Block():
         #Positional Details
         self.height = 0              #The height of the block in the blockchain (set by blockchain)
         self.prevh = previous_hash   #The hash of the target this block will attach to (usually the surface block of the chain)
-        self.prev = None             #The actual target obj. Not set prior to being accepted by blockchain to avoid deep copies during pickling (set by blockchain)
+        self.prev = None             #The actual target obj. Not set prior to being accepted by blockchain to avoid deep copies during pickling (set by blockchain) EDIT: I DON'T THINK I EVEN USE THIS ANYMORE ANYWHERE. REFER TO RULE NUMBER ONE OF BLOCKCHAIN.
         self.next = []               #The blocks attached to this block (set by blockchain)
         
         #Mining Details
@@ -61,6 +62,9 @@ class Block():
     
     def __hash__(self):
         return int(self.hash, 16)
+    
+    def hash_block(self):
+        return hashlib.sha256(hash_info(self).encode()).hexdigest()
     
     def add_Tx(self, Tx):
         try: #Malicious or invalid Tx can throw errors
@@ -110,14 +114,15 @@ class Block():
             return False
 
     def isMined(self):
-        block_hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
-        if int(block_hash, 16) <= int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',16)/16**(self.difficulty):
+        self.hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
+        if int(self.hash, 16) <= int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',16)/16**(self.difficulty):
             return True
         return False
     
     def mine(self):
         self.add_CBTx(CBTx(self.miner, self.mine_reward, type="reward"))
         info(f"[{self}] Mining block (this may take some time)...")
+        self.mine_seq = 0
         while not self.isMined():
             self.mine_seq += 1
         self.hash = hashlib.sha256(hash_info(self).encode()).hexdigest()
@@ -152,7 +157,7 @@ def _(CBTx):
         return None
     
 #A general Block verification tool that is trusted by the blockchain (Verifies everything except UTxO validity)
-def verify_block(block, difficulty, miner_reward):
+def verify_block(block, difficulty, miner_reward, chain_password=None):
     try:#Malicious or invalid classes may throw errors
         #1.1- Check if the Block is lying about its hash
         if block.hash != hashlib.sha256(hash_info(block).encode()).hexdigest():
@@ -170,11 +175,15 @@ def verify_block(block, difficulty, miner_reward):
             warn(f"[Block Verification] {block} not mined to difficulty: {difficulty}!")
             return False
         
-        #2.2- Check if miner reward is under specified amt
+        #2.2- Check if miner reward is under specified amt, and if additions have correct password
         reward_total = 0
         for CBTx in block.CBTx_list:
             if CBTx.type == "reward":
                 reward_total += CBTx.amt
+            if CBTx.type == "addition":
+                if CBTx.password != chain_password:
+                    warn(f"[Block Verification] {block} tried unauthorized coin addition!")
+                    return False
         if reward_total > miner_reward:
             warn(f"[Block Verification] {block} has awarded higher miner reward than allowed: Limit- {reward_total}, Awarded- {miner_reward}!")
             return False

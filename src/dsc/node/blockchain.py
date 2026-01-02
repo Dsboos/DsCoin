@@ -11,7 +11,7 @@ import sys
 
 #Rule Number One: Always use hashes to reference blocks. Only use objs when details within blocks are required
 class BlockChain():
-    def __init__(self, root=None, difficulty=3, tx_limit=5, reward=64, name="unnamed_blockchain"):
+    def __init__(self, root=None, difficulty=3, tx_limit=5, reward=64, name="unnamed_blockchain", chain_password=None):
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
         self.db_path = self.get_data_directory()/"blockchain.db"
@@ -21,6 +21,7 @@ class BlockChain():
 
         #Chain Details
         self.name = name
+        self.chain_password = chain_password
         self.height = 0
         self.root = root
         self.surface = None
@@ -174,7 +175,7 @@ class BlockChain():
     def process_block(self, block):
         #A) Verifications
         #1.1- Verify Block (everything except UTxO validity)
-        if not verify_block(block, self.difficulty, self.mine_reward):
+        if not verify_block(block, self.difficulty, self.mine_reward, self.chain_password):
             fail(f"[BlockChain] {block} couldn't be verified!")
             return False
         
@@ -348,6 +349,10 @@ class BlockChain():
     #Fetching Methods
     def fetch_UTxOs(self, pks):
         query = self.cursor.execute("SELECT * FROM UTxOs WHERE rcvr = ?", (pks,)).fetchall()
+        return query
+
+    def fetch_chainstate(self):
+        query = self.cursor.execute("SELECT * FROM blockchain").fetchone()
         return query
 
 if __name__ == "__main__":
