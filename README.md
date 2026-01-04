@@ -145,6 +145,95 @@ Once everything is confirmed, you can finally sign and submit the transaction to
 
 > **IMPORTANT:** You must be connected to a node to submit transactions.
 
+## 2. Mine Blocks
+
+Apart from being able to create transactions, the client can also be used to create and mine blocks. Depending on the reward set for a mined block submission by the blockchain, mining can be a good way of earning DsCoin. The _Mine Blocks_ tab provides you what you need to begin.
+
+![alt text](project_photos/mine_blocks.png)
+
+> ### What is Mining:
+>
+> Mining is proof of work. Blockchains implement mining in order to safeguard the chain against malicious brute force block additions and excessive forking. Any block that is valid can get added onto the chain. As a result, sometimes blockchains may recieve multiple blocks trying to append to the same location on the chain.
+>
+> This causes forks to form in the chain. Multiple, parallel, competing forks can make the chain very confusing and unreliable. To lower the possiblity of such clashes in submissions, the blockchain only accepts **mined** blocks. These are blocks that must have a very specific hash (one that falls within a certain threshold) in order to be accepted. Obtaining such a hash takes computational work and time, known as mining, and ensures that a natural buffer period arises between block submissions.
+>
+> In DsCoin, the mining algorithm continuously increments a sequence known as the mine sequence, that is part of the block's hash data, till a block hash is obtained with a certain number of leading zeroes (called the difficulty). For example, an acceptable hash within a difficulty requirement of 5 would be:\
+> `0000035351c47b1151ab611d180e575a3b97e550aebb09193846baa829613acb`
+
+The first step to mining a block, is to create a block. This can be done by clicking on the Create Block button near the top right corner.
+
+![alt text](project_photos/mine_blocks_create_block.png)
+
+Once you try to create a block, you will be prompted to enter the block's header details. These are important details that decide the design and limitations of the block:
+
+1. **Block Name** _(optional)_
+2. **Previous Block:** The hash of the previous block, or the block that your block will append to on the chain. This should almost always be the surface block on the chain.
+3. **Reward:** The reward that you, the miner, will recieve for submitting the mined block. _(set by chain)_
+4. **Difficulty:** The difficulty of the block mining process. The higher this number, the longer and harder the block is to mine. _(set by chain)_
+5. **Tx Limit:** The maximum number of transactions the block will accept in its body. _(set by chain)_
+
+> **Be careful when entering the details yourself: The blockchain is particular about block details, and will reject ones that don't match its specifications.**
+
+A safe way to enter details is to load them from the node, by using the _Load Details from Node_ button at the top right. This automatically fetches chain specifications and enters them for you. It also enters the surface block's hash into the previous block field. Click _Save_ once done.
+
+![alt text](project_photos/mine_blocks_block_details.png)
+
+Now that your block is created, you can view its entire structure and contents in the block preview pane. You may notice a transaction under the CBTx section. This is the mine reward that is made out to the currently active wallet in the client.\
+Since the block hasn't been mined yet, you may also notice that the status below says _Not Mined_. We will see how to change that shortly.
+
+![alt text](project_photos/mine_blocks_block_preview.png)
+
+If ever you are unsatisfied with the block you have created, or you want to create a new one, you can delete the block by pressing the _Delete Block_ button at the bottom left corner.
+
+![alt text](project_photos/mine_blocks_delete_block.png)
+
+The purpose of a block is to host and store transactions on the chain. To add transactions to your block, you can do so by selecting them from the mempool.
+
+> ### Mempool
+>
+> It is the collection of all unconfirmed transactions that have still not been taken in by any blocks and put on the chain.
+
+If you accidently add transactions that have already been confirmed, your block **will** get rejected. This is why it is very important to refresh the mempool list to get the latest unconfirmed transactions.\
+Press the refresh icon to get the latest list. You can also automatically select all the transactions you are allowed to add to your block (the Tx Limit) by pressing the _Select Limit_ button.
+
+![alt text](project_photos/mine_blocks_mempool_refresh.png)
+
+When you select a transaction from the mempool list, they will automatically be added to your block and you you'll be able to see them inside the block preview. The transactions will be displayed under the Tx section, and their corresponding transaction fees under the CBTx section.
+
+![alt text](project_photos/mine_blocks_mempool_select.png)
+
+> ### Coin Base Additions
+>
+> Coin base additions are additions that create new coins. These require a password that is set by the chain. In real decentralized blockchains, coin base additions are only used for testing or initiation and disabled after the chains becomes fully functional.\
+> To add a coin base addition, fill the details, along with the password, in the Coin Base form and click on _Add Coins_. The addition will show up under the CBTx section of the block preview.
+>
+> ![alt text](project_photos/mine_blocks_coinbase.png)
+
+Once you have confirmed the contents of your block, you can begin the mining process. To do so, simply click on the _Mine Block_ button and let the block mine. This may take some time depending on the difficulty.
+
+![alt text](project_photos/mine_blocks_mine_block.png)
+
+The default preset is _Medium_, which calculated in batches of 20,000 hashes. If you wish to increase or decrease the load on your system, you may select another preset accordingly from the preset drop down menu.
+
+![alt text](project_photos/mine_blocks_mining_preset.png)
+
+> **You will need to cancel the mining to change your preset if you have already started mining.**
+
+If you want to stop mining, you can do so by pressing the _Cancel_ button. This will not delete your mining progress, but rather pause it until you choose to mine again. The mining will continue from the sequence it left off at.
+
+![alt text](project_photos/mine_blocks_cancel_mining.png)
+
+Once the algorithm acquires a hash that falls within the acceptable threshold, it will stop mining and display the block status as _Mined_.\
+You can verify if the block is truly mined by checking if the displayed block hash has the same (or more) number of leading zeroes as your set difficulty.
+
+![alt text](project_photos/mine_blocks_mined_block_preview.png)
+
+The only step left to do after mining the block, is to submit the block. Make sure you submit the block as soon as possible to avoid losing your place on the chain to someone else. Click the _Submit_ button to submit your block to the node.
+
+![alt text](project_photos/mine_blocks_submit.png)
+
+Once the chain accepts your block, your rewards and fees will be accessible to you in the form of UTxOs (if you're on the main chain).
+
 ---
 
 ---
@@ -174,7 +263,7 @@ Block Hash = **blockh**
 
 ## 0. Hashes & Hash Info
 
-> Knowing about hashes and hash infos is a prerequisite to understanding how hashes are used in this project. This is a brief overview of that
+Knowing about hashes and hash infos is a prerequisite to understanding how hashes are used in this project. This is a brief overview of that
 
 > ### Hashes
 >
