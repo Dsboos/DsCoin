@@ -3,12 +3,12 @@ from dsc.common.prettyprint import warn, fail, success, info
 from dsc.common.transactions import TxO, Tx
 from dsc.common.blocks import Block, CBTx
 from dsc.client.wallet_handler import WalletHandler
-from dsc.client.mining_handler import MiningHandler
+from dsc.client.chain_handler import ChainHandler
 from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI, CreateBlockUI
 #PySide6 imports
-from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog, QSlider, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog, QTreeWidgetItem
 from PySide6.QtCore import QTimer, Qt
 from qasync import QEventLoop
 import qdarktheme
@@ -18,15 +18,16 @@ import random, sys, pickle, ecdsa, asyncio
 
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, wh: WalletHandler, mh: MiningHandler, nc: NodeClient):
+    def __init__(self, wh: WalletHandler, ch: ChainHandler, nc: NodeClient):
         super().__init__()
 
         #Button Cooldowns
         #Submit cooldown
-        self.sign_btn_cooldown = QTimer(self)
-        self.sign_btn_cooldown.setSingleShot(True) # Timer runs only once
-        self.sign_btn_cooldown.timeout.connect(lambda: self.sign_btn.setEnabled(True))
-        self.sign_btn_cooldown_dur = 3000 # 3 second cooldown
+        self.submission_cooldown = QTimer(self)
+        self.submission_cooldown.setSingleShot(True) # Timer runs only once
+        self.submission_cooldown.timeout.connect(lambda: self.sign_btn.setEnabled(True))
+        self.submission_cooldown.timeout.connect(lambda: self.submit_btn.setEnabled(True))
+        self.submission_cooldown_dur = 3000 # 3 second cooldown
         
         #Connections
         #Wallet Tab
@@ -48,6 +49,7 @@ class DsCoinClient(DsCoinUI):
         self.mempool_list.itemChanged.connect(self.insert_tx)
         self.select_limit_btn.clicked.connect(self.select_limit)
         self.add_cb_btn.clicked.connect(self.create_cbtx)
+        self.submit_btn.clicked.connect(self.compile_block)
 
         #Application variables
         self.output_total = 0
@@ -58,7 +60,7 @@ class DsCoinClient(DsCoinUI):
 
         #Handlers
         self.wh = wh
-        self.mh = mh
+        self.ch = ch
         self.nc = nc
 
         #initial function calls
@@ -95,11 +97,12 @@ class DsCoinClient(DsCoinUI):
         self.setDisabled(True)
         query, msg = await self.nc.fetch_mempool()
         if query:
-            self.mh.load_pending(query)
+            self.ch.load_pending(query)
             info(f"Updated Mempool")
             self.display_error_m()
         elif not msg:
             self.display_error_m(f"Mempool is currently all empty :)")
+            self.ch.load_pending([])
         else:
             self.display_error_m(f"Couldn't fetch mempool: {msg}")
         self.load_mempool()
@@ -112,7 +115,7 @@ class DsCoinClient(DsCoinUI):
         self.setDisabled(True)
         query, msg = await self.nc.fetch_chainstate()
         if query:
-            self.mh.load_chainstate(query)
+            self.ch.load_chainstate(query)
             info(f"Updated Chainstate")
             self.display_error_m()
         elif not msg:
@@ -226,6 +229,9 @@ class DsCoinClient(DsCoinUI):
         preset_mapping = {0: 1000, 1:8000, 2:20000, 3:50000, 4:100000}
         self.batch_size = preset_mapping[preset]
 
+    async def update_chain_viewer(self):
+        self.setDisabled(True)
+
     #Addition/Creation Functions
     def add_output(self):
         name = self.tx_name_field.text().strip()
@@ -247,7 +253,7 @@ class DsCoinClient(DsCoinUI):
             self.display_error("Remainder is less than or equal to Zero!")
 
     def create_block(self):
-        dialog = CreateBlockDialog(self.mh)
+        dialog = CreateBlockDialog(self.ch)
         self.update_chainstate()    #Update chainstate before block creation to get latest details when loading button is clicked
         dialog.show()
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -275,7 +281,7 @@ class DsCoinClient(DsCoinUI):
             if self.mempool_list.item(row, 2).checkState() != Qt.CheckState.Checked:
                 continue
             txh = self.mempool_list.item(row, 0).text()
-            query = self.mh.get_tx_from_hash(txh)
+            query = self.ch.get_tx_from_hash(txh)
             if not query:
                 self.display_error_m("Couldn't find this Tx. Please refresh your mempool.")
             tx = pickle.loads(query[0])
@@ -372,7 +378,7 @@ class DsCoinClient(DsCoinUI):
         self.mempool_list.clearContents()
         self.mempool_list.setRowCount(0)
         row = 0
-        query = self.mh.get_pending()
+        query = self.ch.get_pending()
         for tx in query:
             self.mempool_list.insertRow(row)
             self.mempool_list.setItem(row, 0, QTableWidgetItem(tx[1]))
@@ -385,7 +391,7 @@ class DsCoinClient(DsCoinUI):
         self.mempool_list.blockSignals(False)          
 
     def load_details(self):#DEPRECATED FUNC, DIALOG HANDLES THIS NOW
-        query = self.mh.get_chainstate()
+        query = self.ch.get_chainstate()
         if not query:
             return
         surface = pickle.loads(query[4])
@@ -393,6 +399,9 @@ class DsCoinClient(DsCoinUI):
         diff = query[5]
         limit = query[6]
         reward = query[7]
+
+    def load_blocks(self):
+        pass
 
     #Submission Functions
     def compile_tx(self):
@@ -424,7 +433,7 @@ class DsCoinClient(DsCoinUI):
                 return
         tx.sign(self.wh.active_sk)
         asyncio.create_task(self.submit_tx(tx))
-        self.sign_btn_cooldown.start(self.sign_btn_cooldown_dur)
+        self.submission_cooldown.start(self.submission_cooldown_dur)
 
     async def submit_tx(self, tx):
         self.setDisabled(True)
@@ -435,6 +444,23 @@ class DsCoinClient(DsCoinUI):
             self.display_error()
         self.wh.del_all_outputs()
         self.load_output_list()
+        self.setDisabled(False)
+    
+    def compile_block(self):
+        self.submit_btn.setEnabled(False)
+        asyncio.create_task(self.submit_block(self.active_block))
+        self.submission_cooldown.start(self.submission_cooldown_dur)
+
+    async def submit_block(self, block):
+        self.setDisabled(True)
+        status, msg = await self.nc.submit_block(block)
+        if not status:
+            self.display_error_m(f"Error submitting block: {msg}")
+        else:
+            self.display_error_m()
+            self.active_block = None
+            self.update_preview()
+            self.mempool_viewer_refresh()
         self.setDisabled(False)
 
     #Utility Functions
@@ -449,6 +475,10 @@ class DsCoinClient(DsCoinUI):
         self.load_output_list()
         self.update_qotd()
         self.update_inputs()
+
+        self.active_block = None
+        self.update_preview()
+        self.mempool_viewer_refresh()
         self.setDisabled(False)
 
     def select_all_inputs(self):
@@ -519,11 +549,11 @@ class DsCoinClient(DsCoinUI):
 class CreateBlockDialog(CreateBlockUI):
     def __init__(self, mh):
         super().__init__()
-        self.mh = mh
+        self.ch = mh
         self.load_details_btn.clicked.connect(self.load_details)
 
     def load_details(self):
-        query = self.mh.get_chainstate()
+        query = self.ch.get_chainstate()
         if not query:
             return
         surface = pickle.loads(query[4])
@@ -557,14 +587,14 @@ def main():
 
     nc = NodeClient(HOST, PORT)
     wh = WalletHandler(nc)
-    mh = MiningHandler()
+    ch = ChainHandler()
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:
         exit(1)
         
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-    win = DsCoinClient(wh, mh, nc)
+    win = DsCoinClient(wh, ch, nc)
     win.show()
     with loop:
         QTimer.singleShot(0, win.update_chainstate) #Initial fetch and updates from Node

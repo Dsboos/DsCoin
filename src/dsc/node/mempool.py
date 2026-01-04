@@ -24,6 +24,7 @@ class Mempool():
     def add_tx(self, tx: Tx):
         txh = tx.hash
         fee = tx.inputs_amt - tx.outputs_amt
+        self.del_tx(tx)
         self.cursor.execute("INSERT OR IGNORE INTO pending VALUES(?, ?, ?)", (pickle.dumps(tx), txh, fee))
         for input in tx.inputs:
             self.cursor.execute("INSERT OR IGNORE INTO spent_inputs VALUES(?, ?, ?)", (None, input.hash, txh))

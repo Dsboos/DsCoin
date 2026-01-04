@@ -2,7 +2,7 @@ from dsc.common.transactions import TxO, Tx
 import sqlite3, sys, pickle
 from pathlib import Path
 
-class MiningHandler():
+class ChainHandler():
     def __init__(self):
         self.init_db()
 
@@ -24,7 +24,26 @@ class MiningHandler():
                             tx_limit INTEGER,
                             mine_reward INTEGER
                             )""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS blocks (
+                            hash TEXT PRIMARY KEY,
+                            prevh TEXT,
+                            height INTEGER,
+                            main_chain BOOLEAN,
+                            obj BLOB
+                            )                           
+                            """)
         self.conn.commit()
+    
+    def get_blocks(self):
+        query = self.cursor.execute("SELECT * FROM blocks").fetchall()
+        return query
+    
+    def get_block_from_hash(self, blockh):
+        query = self.cursor.execute("SELECT * FROM blocks WHERE hash = ?", (blockh,)).fetchone()
+        return query
+    
+    def load_blocks(self):
+        pass
                             
     def get_pending(self):
         query = self.cursor.execute("SELECT * FROM pending").fetchall()

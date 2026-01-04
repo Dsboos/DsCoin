@@ -1,11 +1,11 @@
-from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QTextEdit, QPlainTextEdit,
-                               QLineEdit, QPushButton, QTableWidget, QHBoxLayout, QLayout,
-                               QVBoxLayout, QGridLayout, QTabBar, QFormLayout, QSpacerItem,
-                               QTabWidget, QTableWidgetItem, QHeaderView, QGroupBox, QSizePolicy, 
-                               QMessageBox, QDoubleSpinBox, QStyle, QMainWindow, QAbstractItemView,
-                               QSpinBox, QDialog, QComboBox)
-from PySide6.QtCore import Qt, QLocale, QSize
-from PySide6.QtGui import QDoubleValidator, QIcon, QAction
+from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QPlainTextEdit,
+                               QLineEdit, QPushButton, QTableWidget, QHBoxLayout,
+                               QVBoxLayout, QGridLayout, QFormLayout, QTabWidget, 
+                               QHeaderView, QGroupBox, QDoubleSpinBox, QMainWindow, 
+                               QAbstractItemView, QSpinBox, QDialog, QComboBox,
+                               QTreeWidget, QTreeWidgetItem)
+from PySide6.QtCore import Qt, QLocale, QSize, QPointF
+from PySide6.QtGui import QDoubleValidator, QIcon, QAction, QPen, QColor
 import qdarktheme
 import sys
 
@@ -31,9 +31,11 @@ class DsCoinUI(QMainWindow):
         self.tab_widget.addTab(self.blockchain_tab, QIcon("src\\dsc\\client\\ui\\assets\\icons\\blockchain.png"), "View Blockchain")
         self.tab_widget.tabBar().setMinimumWidth(500)
         self.tab_widget.setStyleSheet("QTabBar::tab {padding-left: 20px; padding-right: 20px;}")
-
+        self.tab_widget.setCurrentIndex(2)
+        
         self.init_wallet_tab()
         self.init_mine_tab()
+        self.init_blockchain_tab()
         self.init_menu()
 
     def init_wallet_tab(self):
@@ -434,6 +436,17 @@ class DsCoinUI(QMainWindow):
         mine_layout.addLayout(mine_layout_container2, 1)
         self.mine_tab.setLayout(mine_layout)
 
+    def init_blockchain_tab(self):
+        main_layout = QHBoxLayout()
+        chain_viewer_layout = QVBoxLayout()
+        self.chain_viewer = QTreeWidget()
+        self.chain_viewer.setColumnCount(3)
+        self.chain_viewer.setHeaderLabels(["Block", "Height", "Main Chain"])
+
+        chain_viewer_layout.addWidget(self.chain_viewer)
+        main_layout.addLayout(chain_viewer_layout)
+        self.blockchain_tab.setLayout(main_layout)
+
     def init_menu(self):
         self.change_wallet_btn = QPushButton(QIcon().fromTheme("user-available"), "")
         self.change_wallet_btn.setToolTip("Change Wallets")
@@ -455,7 +468,7 @@ class DsCoinUI(QMainWindow):
         self.menu.setLayout(menu_layout)
         self.menu.setObjectName("menu")
         self.menu.setStyleSheet("QWidget#menu { background-color: #173F5F ;}")
-
+    
 
 class CreateBlockUI(QDialog):
     def __init__(self):

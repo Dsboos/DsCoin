@@ -170,6 +170,22 @@ def verify_block(block, difficulty, miner_reward, chain_password=None):
                 warn(f"[Block Verification] {block} has invalid Tx: {Tx}!")
                 return False
             
+        #1.3 (NEW)- Verify if any inputs or outputs are repeated in block. -04/01/2026
+        inputs = []
+        outputs = []
+        for Tx in block.Tx_list:
+            for TxI in Tx.inputs:
+                inputs.append(TxI.hash)
+            for TxO in Tx.outputs:
+                outputs.append(TxO.hash)
+        if len(inputs) != len(set(inputs)):
+            warn(f"[Block Verification] {block} has duplicate inputs!")
+            return False
+        if len(outputs) != len(set(outputs)):
+            warn(f"[Block Verification] {block} has duplicate outputs!")
+            return False
+
+            
         #2.1- Check block is mined to specified difficulty
         if not (int(block.hash, 16) <= int('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF',16)/16**(difficulty)):
             warn(f"[Block Verification] {block} not mined to difficulty: {difficulty}!")

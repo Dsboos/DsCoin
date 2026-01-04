@@ -141,7 +141,7 @@ class Node():
                 status = bc.process_block(block)
             return status
         except Exception as e:
-            warn2(f"[Network] Submitted block was rejected by chain!")
+            warn2(f"[Network] Chain encountered error from block!: {e}")
             return False
 
     #Mempool fetch request handling
