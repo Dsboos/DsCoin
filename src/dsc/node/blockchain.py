@@ -34,7 +34,9 @@ class BlockChain():
         self.Tx_limit = tx_limit
         self.mine_reward = reward
 
-        self.init_blockchain()
+        self.blank_chain = False
+        if not self.init_blockchain():
+            self.blank_chain = True
         self.save_snapshot()
 
     #Database Methods
@@ -101,11 +103,11 @@ class BlockChain():
         if not query:
             self.save_state()
             info(f"[{self.name}] Couldn't find existing blockchain, so made a new one! Set the root if you haven't already.")
-            return
+            return False
         if not self.root and not pickle.loads(query[3]):
             self.save_state()
             info(f"[{self.name}] Couldn't find existing blockchain, so made a new one! Set the root if you haven't already.")
-            return
+            return False
         self.name = query[0]
         self.height = query[1]
         self.root = pickle.loads(query[3])
@@ -113,6 +115,7 @@ class BlockChain():
         self.difficulty = query[5]
         self.Tx_limit = query[6]
         self.mine_reward = query[7]
+        return True
 
     def reorg(self, new_block):
         new_path = []                   #New block to common anscestor (not including)

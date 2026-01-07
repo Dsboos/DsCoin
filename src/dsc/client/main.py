@@ -8,13 +8,12 @@ from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI, CreateBlockUI, SwitchNodeUI
 #PySide6 imports
-from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog, QTreeWidgetItem
+from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
 from qasync import QEventLoop
 import qdarktheme
 #Other imports
-from pathlib import Path
-import random, sys, pickle, ecdsa, asyncio
+import random, pickle, ecdsa, asyncio
 
 
 class DsCoinClient(DsCoinUI):
@@ -392,14 +391,15 @@ class DsCoinClient(DsCoinUI):
         self.mempool_list.blockSignals(False)          
 
     def load_details(self):#DEPRECATED FUNC, DIALOG HANDLES THIS NOW
-        query = self.ch.get_chainstate()
-        if not query:
-            return
-        surface = pickle.loads(query[4])
-        surfaceh = surface.hash
-        diff = query[5]
-        limit = query[6]
-        reward = query[7]
+        # query = self.ch.get_chainstate()
+        # if not query:
+        #     return
+        # surface = pickle.loads(query[4])
+        # surfaceh = surface.hash
+        # diff = query[5]
+        # limit = query[6]
+        # reward = query[7]
+        pass
 
     def load_blocks(self):
         pass
@@ -569,6 +569,7 @@ class CreateBlockDialog(CreateBlockUI):
         if not query:
             return
         surface = pickle.loads(query[4])
+        surfaceh = None
         surfaceh = surface.hash
         diff = query[5]
         limit = query[6]
@@ -589,7 +590,7 @@ def main():
     createKeypair()
 
     #Bootstrap Node
-    HOST, PORT =  ("nodeabrar.ddns.net", 8000)
+    HOST, PORT =  ("localhost", 8000)
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
@@ -599,7 +600,7 @@ def main():
     ch = ChainHandler()
     login = DsCoinLogin(wh)
     if login.exec() != QDialog.DialogCode.Accepted:
-        exit(1)
+        return
         
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)

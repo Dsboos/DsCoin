@@ -3,8 +3,7 @@ from dsc.node.mempool import Mempool
 from dsc.common.blocks import Block, CBTx
 from dsc.common.transactions import Tx, TxO, verify_Tx
 from dsc.common.prettyprint import info, warn2, fail, success, info2, warn2
-import asyncio
-import pickle
+import asyncio, pickle, ecdsa
 
 HOST = "0.0.0.0"
 PORT = 8000
@@ -184,6 +183,28 @@ class Node():
 
 if __name__ == "__main__":
     bc = BlockChain()
+    if bc.blank_chain:
+        sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        pk = sk.get_verifying_key()
+        name = input("Chain Name: ")
+        difficulty = int(input("Difficulty: "))
+        Tx_limit = int(input("Tx Limit: "))
+        mine_reward = int(input("Mining Reward: "))
+        password = input("Chain Password (TESTING): ")
+        
+        bc.name = name
+        bc.difficulty = difficulty
+        bc.Tx_limit = Tx_limit
+        bc.mine_reward = mine_reward
+        bc.chain_password = password
+
+        root = Block(None, pk, bc.mine_reward, bc.Tx_limit, bc.difficulty, "root")
+        root.mine()
+        bc.add_block(root, main_chain=True)
+        bc.root = root
+        bc.surface = bc.root
+        bc.save_state()
+
     mp = Mempool()
     node = Node()
     asyncio.run(node.server_loop())
