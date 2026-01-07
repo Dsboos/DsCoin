@@ -4,6 +4,12 @@ version = "0.1.0"
 description = "A cryptocoin implementation called DsCoin"
 requires-python = ">=3.10"
 
+dependencies = [
+    "ecdsa",
+    "qasync",
+    "PySide6",
+    "qdarktheme"
+]
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"

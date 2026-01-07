@@ -3,10 +3,10 @@ from dsc.node.mempool import Mempool
 from dsc.common.blocks import Block, CBTx
 from dsc.common.transactions import Tx, TxO, verify_Tx
 from dsc.common.prettyprint import info, warn2, fail, success, info2, warn2
-import asyncio, pickle, ecdsa
+import asyncio, pickle, ecdsa, os
 
 HOST = "0.0.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 MAX_FILE_SIZE = 10240000 #10MB
 db_lock = asyncio.Lock()
 
