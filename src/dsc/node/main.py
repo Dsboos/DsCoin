@@ -6,7 +6,7 @@ from dsc.common.prettyprint import info, warn2, fail, success, info2, warn2
 import asyncio
 import pickle
 
-HOST = "localhost"
+HOST = "0.0.0.0"
 PORT = 8000
 MAX_FILE_SIZE = 10240000 #10MB
 db_lock = asyncio.Lock()

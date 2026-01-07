@@ -31,7 +31,7 @@ class DsCoinUI(QMainWindow):
         self.tab_widget.addTab(self.blockchain_tab, QIcon("src\\dsc\\client\\ui\\assets\\icons\\blockchain.png"), "View Blockchain")
         self.tab_widget.tabBar().setMinimumWidth(500)
         self.tab_widget.setStyleSheet("QTabBar::tab {padding-left: 20px; padding-right: 20px;}")
-        self.tab_widget.setCurrentIndex(2)
+        self.tab_widget.setCurrentIndex(0)
         
         self.init_wallet_tab()
         self.init_mine_tab()
@@ -560,6 +560,52 @@ class CreateBlockUI(QDialog):
         main_layout.addLayout(btn_container)
         self.setLayout(main_layout)
 
+class SwitchNodeUI(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.setWindowTitle("Switch Node")
+        self.setWindowIcon(QIcon("src\\dsc\\client\\ui\\assets\\icons\\logo.png"))
+
+    def initUI(self):
+        self.setContentsMargins(20, 10, 20, 10)
+        main_layout = QVBoxLayout()
+
+        details_form = QFormLayout()
+        details_form.setSpacing(10)
+
+        title = QLabel("Switch Node")
+        title.setStyleSheet(styleSheets.header2)
+        details_form.setWidget(0, QFormLayout.ItemRole.SpanningRole, title)
+
+        self.addr_field = QLineEdit()
+        details_form.insertRow(1, "Host:", self.addr_field)
+
+        self.port_field = QSpinBox()
+        self.port_field.setRange(0, 65535)
+        self.port_field.setValue(8000)
+        details_form.insertRow(3, "Port:", self.port_field)
+
+        self.save_btn = QPushButton("Change")
+        self.save_btn.setStyleSheet(styleSheets.good_btn)
+        self.save_btn.setMinimumWidth(100)
+        self.save_btn.clicked.connect(self.accept)
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setStyleSheet(styleSheets.bad_btn)
+        self.cancel_btn.setMinimumWidth(100)
+        self.cancel_btn.setAutoDefault(False)
+        self.cancel_btn.clicked.connect(self.reject)
+
+        main_layout.addLayout(details_form)
+        main_layout.addSpacing(20)
+        btn_container = QHBoxLayout()
+        btn_container.addWidget(self.cancel_btn)
+        btn_container.addStretch()
+        btn_container.addWidget(self.save_btn)
+        main_layout.addLayout(btn_container)
+        self.setLayout(main_layout)
+
 
 class styleSheets:
     big_btn = "QPushButton {font-size: 12pt; font-weight: bold; padding: 10px;}"
@@ -572,6 +618,8 @@ class styleSheets:
 if __name__ in "__main__":
     app = QApplication(sys.argv)
     qdarktheme.setup_theme("dark")
+    # d = SwitchNodeUI()
+    # d.exec()
     win = DsCoinUI()
     win.show()
     app.exec()

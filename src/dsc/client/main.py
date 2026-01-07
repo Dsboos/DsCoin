@@ -6,7 +6,7 @@ from dsc.client.wallet_handler import WalletHandler
 from dsc.client.chain_handler import ChainHandler
 from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
-from dsc.client.ui.ui import DsCoinUI, CreateBlockUI
+from dsc.client.ui.ui import DsCoinUI, CreateBlockUI, SwitchNodeUI
 #PySide6 imports
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog, QTreeWidgetItem
 from PySide6.QtCore import QTimer, Qt
@@ -30,8 +30,9 @@ class DsCoinClient(DsCoinUI):
         self.submission_cooldown_dur = 3000 # 3 second cooldown
         
         #Connections
-        #Wallet Tab
         self.change_wallet_btn.clicked.connect(self.change_wallet)
+        self.switch_node_btn.clicked.connect(self.switch_node)
+        #Wallet Tab
         self.add_btn.clicked.connect(self.add_output)
         self.remainder_btn.clicked.connect(self.add_remainder)
         self.del_tx_btn.clicked.connect(self.del_tx)
@@ -481,6 +482,17 @@ class DsCoinClient(DsCoinUI):
         self.mempool_viewer_refresh()
         self.setDisabled(False)
 
+    def switch_node(self):
+        dialog = SwitchNodeUI()
+        dialog.addr_field.setText("localhost")
+        dialog.port_field.setValue(8000)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self.nc.host = dialog.addr_field.text()
+        self.nc.port = dialog.port_field.value()
+        self.update_inputs()
+        self.update_mempool()
+
     def select_all_inputs(self):
         if not self.select_all_toggle:
             for row in range(self.input_tx_list.rowCount()):
@@ -567,20 +579,17 @@ class CreateBlockDialog(CreateBlockUI):
         self.limit_field.setValue(limit)
         self.reward_field.setValue(reward)
     
-
-def main():
-    #31d51de55b81e6a94cb97e066c79f4e5663ff15a9ffae6ae3bd6e23f7b0e8761fb0317e52fefdbfa7fd4caca83679c7208166de217bac83c037581947071ae67
-    #79f55a07dfb64ac35840eed57b26485874374290d99b86d75f6f2e2477936453
-    rpks = "c45678a9af9701a68e1e41ed6d36310b15ae2534d94a17f5b4ab764d5ecdd6bdfdb8bebe1fe6aad6e1330ef07a1abd909603855c93bae8f9e7f6a8a90f9a90d7"
-    rsks = "73bd55e5fd8c179bfee2f662fcd2cb2663012297a35aa86784d7dcea575130dd"
-    rpk =  ecdsa.VerifyingKey.from_string(bytes.fromhex(rpks), curve=ecdsa.SECP256k1)
-    rsk =  ecdsa.SigningKey.from_string(bytes.fromhex(rsks), curve=ecdsa.SECP256k1)
-
+def createKeypair():
     sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
     pk = sk.get_verifying_key()
     success(f"[Public Key]  {pk.to_string().hex()}")
     success(f"[Private Key] {sk.to_string().hex()}")
-    HOST, PORT =  ("localhost", 8000)
+
+def main():
+    createKeypair()
+
+    #Bootstrap Node
+    HOST, PORT =  ("nodeabrar.ddns.net", 8000)
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
