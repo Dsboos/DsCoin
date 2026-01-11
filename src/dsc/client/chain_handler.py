@@ -42,8 +42,10 @@ class ChainHandler():
         query = self.cursor.execute("SELECT * FROM blocks WHERE hash = ?", (blockh,)).fetchone()
         return query
     
-    def load_blocks(self):
-        pass
+    def load_blocks(self, query):
+        self.cursor.execute("DELETE FROM blocks")
+        for block in query:
+            self.cursor.execute("INSERT INTO blocks VALUES (?, ?, ?, ?, ?)", block)
                             
     def get_pending(self):
         query = self.cursor.execute("SELECT * FROM pending").fetchall()

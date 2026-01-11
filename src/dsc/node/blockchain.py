@@ -28,6 +28,7 @@ class BlockChain():
         if root:
             self.add_block(root)
             self.surface = self.root
+        self.snapshot_interval = 20
 
         #Block Specifications
         self.difficulty = difficulty
@@ -173,6 +174,7 @@ class BlockChain():
         self.cursor.execute(f"INSERT INTO {snapshot_name} SELECT * FROM UTxOs")
         self.cursor.execute("INSERT INTO snapshots VALUES (?, ?, ?)",
                             (snapshot_name, self.height, self.surface.hash if self.surface else None))
+        success(f"[BlockChain] Snapshot: {snapshot_name} created at height: {self.height}!")
         self.conn.commit()
     #Block Processing
     def process_block(self, block):
@@ -219,6 +221,9 @@ class BlockChain():
                 self.surface = block
             self.conn.commit()                  #Save changes to the database after each block is processed
             self.save_state()                   #Update the state of blockchain in memory
+            
+            if self.height%self.snapshot_interval == 0:  #Take a snapshot every "snapshot_interval" blocks
+                self.save_snapshot()
             return True
         else:
             fail(f"[BlockChain] {block} not added: Couldn't attach to anything!")
@@ -352,6 +357,10 @@ class BlockChain():
     #Fetching Methods
     def fetch_UTxOs(self, pks):
         query = self.cursor.execute("SELECT * FROM UTxOs WHERE rcvr = ?", (pks,)).fetchall()
+        return query
+    
+    def fetch_blocks(self):
+        query = self.cursor.execute("SELECT * FROM blocks").fetchall()
         return query
 
     def fetch_chainstate(self):

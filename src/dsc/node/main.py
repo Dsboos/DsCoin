@@ -74,13 +74,16 @@ class Node():
                 writer.close()
                 return
             await self.serve_utxos(pks, reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served UTxOs as per request!")
+            info2(f"[Network] {client_addr}:{client_port} was served copy of UTXOs as per request!")
         elif header == "[mempool_fetch_request]":
             await self.serve_mempool(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of mempool as per request!")
+            info2(f"[Network] {client_addr}:{client_port} was served copy of MEMPOOL as per request!")
+        elif header == "[blocks_fetch_request]":
+            await self.serve_blocks(reader, writer)
+            info2(f"[Network] {client_addr}:{client_port} was served copy of BLOCKS as per request!")
         elif header == "[chainstate_fetch_request]":
             await self.serve_chainstate(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of chain state as per request!")
+            info2(f"[Network] {client_addr}:{client_port} was served copy of CHAINSTATE as per request!")
         else:
             warn2(f"[Network] {client_addr}:{client_port}'s request was denied: Invalid request!")
             writer.write(b"[invalid_request]")
@@ -140,12 +143,21 @@ class Node():
                 status = bc.process_block(block)
             return status
         except Exception as e:
-            warn2(f"[Network] Chain encountered error from block!: {e}")
+            warn2(f"[Node] Chain encountered error from block!: {e}")
             return False
 
     #Mempool fetch request handling
     async def serve_mempool(self, reader, writer):
         query = mp.get_pending()
+        queryb = pickle.dumps(query)
+        writer.write(b"[get_ready]")
+        await writer.drain()
+        await reader.read(1024)         #Get ready for client to recieve the query
+        writer.write(queryb + b"[end_request]")
+        await writer.drain()
+
+    async def serve_blocks(self, reader, writer):
+        query = bc.fetch_blocks()
         queryb = pickle.dumps(query)
         writer.write(b"[get_ready]")
         await writer.drain()
@@ -200,7 +212,7 @@ if __name__ == "__main__":
 
         root = Block(None, pk, bc.mine_reward, bc.Tx_limit, bc.difficulty, "root")
         root.mine()
-        bc.add_block(root, main_chain=True)
+        bc.add_block(root, main_chain=True) # type: ignore (idk why this dumbass retard error keeps coming up.)
         bc.root = root
         bc.surface = bc.root
         bc.save_state()

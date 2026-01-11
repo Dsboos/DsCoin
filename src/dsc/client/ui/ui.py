@@ -442,6 +442,8 @@ class DsCoinUI(QMainWindow):
         self.chain_viewer = QTreeWidget()
         self.chain_viewer.setColumnCount(3)
         self.chain_viewer.setHeaderLabels(["Block", "Height", "Main Chain"])
+        self.chain_viewer.setIndentation(2)
+        self.chain_viewer.setColumnWidth(0, 400)
 
         chain_viewer_layout.addWidget(self.chain_viewer)
         main_layout.addLayout(chain_viewer_layout)

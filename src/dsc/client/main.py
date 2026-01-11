@@ -8,7 +8,7 @@ from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI, CreateBlockUI, SwitchNodeUI
 #PySide6 imports
-from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QDialog
+from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QTreeWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
 from qasync import QEventLoop
 import qdarktheme
@@ -75,9 +75,9 @@ class DsCoinClient(DsCoinUI):
 
     #Update Functions
     def update_inputs(self):
-        asyncio.create_task(self.inputs_fetcher())
+        asyncio.create_task(self._update_inputs())
   
-    async def inputs_fetcher(self):
+    async def _update_inputs(self):
         self.setDisabled(True)
         status, msg = await self.wh.update_inputs()
         if not status and not msg:
@@ -91,9 +91,9 @@ class DsCoinClient(DsCoinUI):
         self.setDisabled(False)
     
     def update_mempool(self):
-        asyncio.create_task(self.mempool_fetcher())
+        asyncio.create_task(self._update_mempool())
 
-    async def mempool_fetcher(self):
+    async def _update_mempool(self):
         self.setDisabled(True)
         query, msg = await self.nc.fetch_mempool()
         if query:
@@ -109,9 +109,9 @@ class DsCoinClient(DsCoinUI):
         self.setDisabled(False)
 
     def update_chainstate(self):
-        asyncio.create_task(self.chainstate_fetcher())
+        asyncio.create_task(self._update_chainstate())
 
-    async def chainstate_fetcher(self):
+    async def _update_chainstate(self):
         self.setDisabled(True)
         query, msg = await self.nc.fetch_chainstate()
         if query:
@@ -123,6 +123,23 @@ class DsCoinClient(DsCoinUI):
         else:
             self.display_error_m(f"Couldn't fetch chainstate: {msg}")
         self.load_details()
+        self.setDisabled(False)
+  
+    def update_blocks(self):
+        asyncio.create_task(self._update_blocks())
+
+    async def _update_blocks(self):
+        self.setDisabled(True)
+        query, msg = await self.nc.fetch_blocks()
+        if query:
+            self.ch.load_blocks(query)
+            info(f"Updated Blocks")
+            self.display_error_m()
+        elif not msg:
+            self.display_error_m(f"No Blocks! Empty Chain?")
+        else:
+            self.display_error_m(f"Couldn't fetch blocks: {msg}")
+        self.load_blocks()
         self.setDisabled(False)
 
     def update_tx_data(self):
@@ -229,8 +246,6 @@ class DsCoinClient(DsCoinUI):
         preset_mapping = {0: 1000, 1:8000, 2:20000, 3:50000, 4:100000}
         self.batch_size = preset_mapping[preset]
 
-    async def update_chain_viewer(self):
-        self.setDisabled(True)
 
     #Addition/Creation Functions
     def add_output(self):
@@ -402,7 +417,35 @@ class DsCoinClient(DsCoinUI):
         pass
 
     def load_blocks(self):
-        pass
+        self.chain_viewer.blockSignals(True)
+        self.chain_viewer.clear()
+        query = self.ch.get_blocks()
+        for block in query:
+
+            parenth = block[1]
+            if parenth == "None":
+                itm = QTreeWidgetItem([block[0], str(block[2]), "X" if block[3] else ""] )
+                itm.setData(0, Qt.ItemDataRole.UserRole, block[0])
+                itm.setExpanded(True)
+                self.chain_viewer.addTopLevelItem(itm)
+                self.chain_viewer.expandToDepth(0)
+                continue
+            
+            parent_item: QTreeWidgetItem = self.search_chain_viewer(parenth)
+            if not parent_item:
+                print("couldnt find parent")
+                continue
+
+            itm = QTreeWidgetItem([block[0], str(block[2]), "X" if block[3] else ""] )
+            itm.setData(0, Qt.ItemDataRole.UserRole, block[0])
+            parent_item.addChild(itm)
+
+            if block[3]:
+                itm.setExpanded(True)
+            else:
+                itm.setDisabled(True)
+
+        self.chain_viewer.blockSignals(False)          
 
     #Submission Functions
     def compile_tx(self):
@@ -484,14 +527,15 @@ class DsCoinClient(DsCoinUI):
 
     def switch_node(self):
         dialog = SwitchNodeUI()
-        dialog.addr_field.setText("localhost")
-        dialog.port_field.setValue(8000)
+        dialog.addr_field.setText(self.nc.host)
+        dialog.port_field.setValue(self.nc.port)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         self.nc.host = dialog.addr_field.text()
         self.nc.port = dialog.port_field.value()
         self.update_inputs()
         self.update_mempool()
+        self.update_blocks()
 
     def select_all_inputs(self):
         if not self.select_all_toggle:
@@ -558,6 +602,24 @@ class DsCoinClient(DsCoinUI):
             return
         self.mine_error_label.setText(msg)
 
+    def search_chain_viewer(self, target_hash):
+        for i in range(self.chain_viewer.topLevelItemCount()):
+            result = self._recursive_search(self.chain_viewer.topLevelItem(i), target_hash)
+            if result:
+                return result
+        return None
+
+    def _recursive_search(self, item, target_hash):
+        if item.data(0, Qt.ItemDataRole.UserRole) == target_hash:
+            return item
+
+        for i in range(item.childCount()):
+            found = self._recursive_search(item.child(i), target_hash)
+            if found:
+                return found
+
+        return None
+
 class CreateBlockDialog(CreateBlockUI):
     def __init__(self, mh):
         super().__init__()
@@ -610,6 +672,7 @@ def main():
         QTimer.singleShot(0, win.update_chainstate) #Initial fetch and updates from Node
         QTimer.singleShot(0, win.update_inputs)
         QTimer.singleShot(0, win.update_mempool)
+        QTimer.singleShot(0, win.update_blocks)
         loop.run_forever()
 
 if __name__ == "__main__":

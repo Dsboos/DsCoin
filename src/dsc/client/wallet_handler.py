@@ -217,6 +217,4 @@ class WalletHandler():
 
 if __name__ == "__main__":
     wh = WalletHandler()
-    pks = "a4b1e2d02e2bcdcb992935c1766d9ddc91ec4b84bc0e29d9875201115b4120aa25985be437e7cfd7fa9d822d7800eb3f926d38c1ce87969a738fb12ab1cabb2f"
-    sks = "19c9223e178a6d39c067f107fc1899ff34ae014bcde09c0b6456bd77e8b14473"
 
