@@ -11,7 +11,7 @@ import ecdsa
 class CBTx():
     def __init__(self, rcvr, amt, type="addition", name="unnamed_cbtx", password=None):
         #Nonce
-        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
+        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime('%H:%M:%S_%d/%m/%y')}"
         self.name = name
 
         #Transaction Details
@@ -34,7 +34,7 @@ class CBTx():
 class Block():
     def __init__(self, previous_hash, miner_pk, miner_reward=64, Tx_limit=5, difficulty=3, name="unnamed_block"):
         #Nonce
-        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
+        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime('%H:%M:%S_%d/%m/%y')}"
         self.name = name
 
         #Positional Details
@@ -137,7 +137,7 @@ def _(block):
     try:
         info = f"[{block.nonce}]||prev: {block.prevh}||miner: {block.miner.to_string().hex()}||mine_seq: {block.mine_seq}||\nTx's: ["
         for Tx in block.Tx_list:
-            info += f"({Tx.hash}|Tx_fee: {Tx.Tx_fee.hash if Tx.Tx_fee else "None"}), "
+            info += f"({Tx.hash}|Tx_fee: {Tx.Tx_fee.hash if Tx.Tx_fee else 'None'}), "
         info += f"]\nCBTx's: ["
         for CBTx in block.CBTx_list:
             info += f"{CBTx.hash}, "

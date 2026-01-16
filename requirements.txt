@@ -1,4 +1,4 @@
 ecdsa
 qasync
 PySide6
-qdarktheme
+pyqtdarktheme

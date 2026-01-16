@@ -161,7 +161,7 @@ class BlockChain():
         self.conn.commit()
 
     def save_snapshot(self):
-        nonce = f"{datetime.now().strftime("%H$%M$%S_%d$%m$%y")}_{random.randint(100000, 999999)}"
+        nonce = f"{datetime.now().strftime('%H$%M$%S_%d$%m$%y')}_{random.randint(100000, 999999)}"
         snapshot_name = "snapshot_" + nonce
         self.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {snapshot_name} (
                             o_hash TEXT PRIMARY KEY,

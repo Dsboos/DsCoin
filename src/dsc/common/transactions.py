@@ -9,7 +9,7 @@ import hashlib
 class TxO():
     def __init__(self, sndr, rcvr, amt, name="unnamed_output"):
         #Nonce
-        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
+        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime('%H:%M:%S_%d/%m/%y')}"
         self.name = name
 
         #Transaction Details
@@ -31,7 +31,7 @@ class TxO():
 class Tx():
     def __init__(self, sndr, name="unnamed_tx"):
         #Nonce
-        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime("%H:%M:%S_%d/%m/%y")}"
+        self.nonce = f"{random.randint(100000, 999999)}_{datetime.now().strftime('%H:%M:%S_%d/%m/%y')}"
         self.name = name
 
         #Tx Identification Details
