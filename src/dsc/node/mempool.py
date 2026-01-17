@@ -7,7 +7,7 @@ class Mempool():
         self.init_db()
 
     def init_db(self):
-        self.conn = sqlite3.connect(self.get_data_directory()/"mempool.db")
+        self.conn = sqlite3.Connection(self.get_data_directory()/"mempool.db", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS pending (
                             obj BLOB,

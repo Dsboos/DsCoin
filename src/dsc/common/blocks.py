@@ -41,7 +41,7 @@ class Block():
         self.height = 0              #The height of the block in the blockchain (set by blockchain)
         self.prevh = previous_hash   #The hash of the target this block will attach to (usually the surface block of the chain)
         self.prev = None             #The actual target obj. Not set prior to being accepted by blockchain to avoid deep copies during pickling (set by blockchain) EDIT: I DON'T THINK I EVEN USE THIS ANYMORE ANYWHERE. REFER TO RULE NUMBER ONE OF BLOCKCHAIN.
-        self.next = []               #The blocks attached to this block (set by blockchain)
+        self.next = []               #The blocks attached to this block (set by blockchain) LATEST_NOTE: I don't think I even use this anywhere anymore --16/01/2026
         
         #Mining Details
         self.difficulty = difficulty #Difficulty of mining the block(specified by blockchain)

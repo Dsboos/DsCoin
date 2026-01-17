@@ -3,220 +3,122 @@ from dsc.node.mempool import Mempool
 from dsc.common.blocks import Block, CBTx
 from dsc.common.transactions import Tx, TxO, verify_Tx
 from dsc.common.prettyprint import info, warn2, fail, success, info2, warn2
-import asyncio, pickle, ecdsa, os
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
+import pickle, ecdsa, base64, uvicorn
 
-HOST = "0.0.0.0"
-PORT = int(os.environ.get("PORT", 8000))
-MAX_FILE_SIZE = 10240000 #10MB
-db_lock = asyncio.Lock()
+bc: BlockChain = None
+mp: Mempool = None
 
-class Node():
-    def __init__(self):
-        pass
-    
-    async def server_loop(self):
-        server = await asyncio.start_server(self.request_handler, HOST, PORT)
-        while True:
-            async with server:
-                info2(f"[Network] Started listening for connections...")
-                await server.serve_forever()
+class QueryPayload(BaseModel):
+    data: str
 
-    async def request_handler(self, reader, writer):
-        data = await reader.read(1024)
-        header = data.decode()
-        peer = writer.get_extra_info("peername")
-        client_addr, client_port = peer[:2]
-        info2(f"[Network] New request from: {client_addr}:{client_port} | {header}")
-        if   header == "[block_submission_request]":
-            block_data = await self.get_block_data(reader, writer)
-            if not block_data:
-                writer.write(b"[invalid_request]")
-                await writer.drain()
-                writer.close()
-                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: Invalid block data!")
-                return 
-            wasAdded = await self.add_block(block_data)
-            if wasAdded:
-                writer.write(b"[block_accepted]")
-                await writer.drain()
-                writer.close()
-                #Delete all txs associated with this block from mempool
-                for tx in pickle.loads(block_data).Tx_list:
-                    mp.del_tx(tx)
-                info2(f"[Network] {client_addr}:{client_port}'s block submission was accepted!")
-            else:
-                writer.write(b"[block_rejected]")
-                await writer.drain()
-                warn2(f"[Network] {client_addr}:{client_port}'s block submission was rejected!")
-        elif header == "[tx_submission_request]":
-            txb = await self.get_tx(reader, writer)
-            if not txb:
-                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: couldn't get tx!")
-                writer.write(b"[tx_rejected]")
-                await writer.drain()
-                writer.close()
-                return
-            if not verify_Tx(pickle.loads(txb), blockless=True):
-                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: couldn't verify tx!")
-                writer.write(b"[tx_rejected]")
-                await writer.drain()
-                writer.close()
-                return
-            writer.write(b"[tx_accepted]")
-            await writer.drain()
-            writer.close()
-            mp.add_tx(pickle.loads(txb))
-            info2(f"[Network] {client_addr}:{client_port}'s tx submission was added to mempool!")
-        elif header == "[utxos_fetch_request]":
-            pks = await self.get_client_pks(reader, writer)
-            if not pks:
-                warn2(f"[Network] {client_addr}:{client_port}'s request was closed: Invalid Public Key!")
-                writer.close()
-                return
-            await self.serve_utxos(pks, reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of UTXOs as per request!")
-        elif header == "[mempool_fetch_request]":
-            await self.serve_mempool(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of MEMPOOL as per request!")
-        elif header == "[blocks_fetch_request]":
-            await self.serve_blocks(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of BLOCKS as per request!")
-        elif header == "[chainstate_fetch_request]":
-            await self.serve_chainstate(reader, writer)
-            info2(f"[Network] {client_addr}:{client_port} was served copy of CHAINSTATE as per request!")
-        else:
-            warn2(f"[Network] {client_addr}:{client_port}'s request was denied: Invalid request!")
-            writer.write(b"[invalid_request]")
-            await writer.drain()
-            writer.close()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global bc, mp
 
-    #UTXO fetch request handling
-    async def serve_utxos(self, pks, reader, writer):
-        query = bc.fetch_UTxOs(pks)
-        queryb = pickle.dumps(query)
-        writer.write(b"[get_ready]")
-        await writer.drain()
-        await reader.read(1024)         #Get ready for client to recieve the query
-        writer.write(queryb + b"[end_request]")
-        await writer.drain()
-        
-    async def get_client_pks(self, reader, writer):
-        pks = b""
-        writer.write(b"[continue_request]")
-        await writer.drain()
-        while pks[-13:] != b"[end_request]":
-            chunk = await reader.read(1024)
-            if not chunk:               #If client closed connection
-                warn2(f"[Network] Failed to get client's pk: Client closed connection!")
-                return False
-            pks += chunk
-            if len(pks) > MAX_FILE_SIZE:       #Check if request is getting too long (more than 100kb)
-                writer.write(b"[request_denied]")
-                await writer.drain()
-                warn2(f"[Network] Failed to get client's pk: Request size limit exhausted!")
-                return False
-        return pks[:-13].decode()
-
-    #Block submission request handling
-    async def get_block_data(self, reader, writer):
-        block_data = b""
-        writer.write(b"[continue_request]")
-        await writer.drain()
-        while block_data[-13:] != b"[end_request]":
-            chunk = await reader.read(1024)
-            if not chunk:                   #If client closed connection  
-                warn2(f"[Network] Failed to get block data: Client closed connection!")
-                return False
-            block_data += chunk
-            if len(block_data) > MAX_FILE_SIZE:    #Check if request is getting too long (more than 100kb)
-                writer.write(b"[request_denied]")
-                await writer.drain()
-                warn2(f"[Network] Failed to get block data: Request size limit exhausted!")
-                return False
-        block_data = block_data[:-13]       #Remove the footer
-        return block_data
-
-    async def add_block(self, block_data):
-        try:
-            async with db_lock:
-                block = pickle.loads(block_data)
-                status = bc.process_block(block)
-            return status
-        except Exception as e:
-            warn2(f"[Node] Chain encountered error from block!: {e}")
-            return False
-
-    #Mempool fetch request handling
-    async def serve_mempool(self, reader, writer):
-        query = mp.get_pending()
-        queryb = pickle.dumps(query)
-        writer.write(b"[get_ready]")
-        await writer.drain()
-        await reader.read(1024)         #Get ready for client to recieve the query
-        writer.write(queryb + b"[end_request]")
-        await writer.drain()
-
-    async def serve_blocks(self, reader, writer):
-        query = bc.fetch_blocks()
-        queryb = pickle.dumps(query)
-        writer.write(b"[get_ready]")
-        await writer.drain()
-        await reader.read(1024)         #Get ready for client to recieve the query
-        writer.write(queryb + b"[end_request]")
-        await writer.drain()
-
-    #Chainstate fetch request handling
-    async def serve_chainstate(self, reader, writer):
-        query = bc.fetch_chainstate()
-        queryb = pickle.dumps(query)
-        writer.write(b"[get_ready]")
-        await writer.drain()
-        await reader.read(1024)         #Get ready signal from client to recieve the query
-        writer.write(queryb + b"[end_request]")
-        await writer.drain()
-
-    #Tx submission request handling
-    async def get_tx(self, reader,writer):
-        txb = b""
-        writer.write(b"[continue_request]")
-        await writer.drain()
-        while txb[-13:] != b"[end_request]":
-            chunk = await reader.read(1024)
-            if not chunk:               #If client closed connection
-                warn2(f"[Network] Failed to get tx: Client closed connection!")
-                return False
-            txb += chunk
-            if len(txb) > MAX_FILE_SIZE:       #Check if request is getting too long (more than 1mb)
-                writer.write(b"[request_denied]")
-                await writer.drain()
-                warn2(f"[Network] Failed to get tx: Request size limit exhausted!")
-                return False
-        return txb[:-13]
-
-if __name__ == "__main__":
     bc = BlockChain()
-    if bc.blank_chain:
-        sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-        pk = sk.get_verifying_key()
-        name = input("Chain Name: ")
-        difficulty = int(input("Difficulty: "))
-        Tx_limit = int(input("Tx Limit: "))
-        mine_reward = int(input("Mining Reward: "))
-        password = input("Chain Password (TESTING): ")
+    # if bc.blank_chain:
+    #     sk = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+    #     pk = sk.get_verifying_key()
+    #     name = input("Chain Name: ")
+    #     difficulty = int(input("Difficulty: "))
+    #     Tx_limit = int(input("Tx Limit: "))
+    #     mine_reward = int(input("Mining Reward: "))
+    #     password = input("Chain Password (TESTING): ")
         
-        bc.name = name
-        bc.difficulty = difficulty
-        bc.Tx_limit = Tx_limit
-        bc.mine_reward = mine_reward
-        bc.chain_password = password
+    #     bc.name = name
+    #     bc.difficulty = difficulty
+    #     bc.Tx_limit = Tx_limit
+    #     bc.mine_reward = mine_reward
+    #     bc.chain_password = password
 
-        root = Block(None, pk, bc.mine_reward, bc.Tx_limit, bc.difficulty, "root")
-        root.mine()
-        bc.add_block(root, main_chain=True) # type: ignore (idk why this dumbass retard error keeps coming up.)
-        bc.root = root
-        bc.surface = bc.root
-        bc.save_state()
-
+    #     root = Block(None, pk, bc.mine_reward, bc.Tx_limit, bc.difficulty, "root")
+    #     root.mine()
+    #     bc.add_block(root, main_chain=True) # type: ignore (idk why this dumbass retard error keeps coming up.)
+    #     bc.root = root
+    #     bc.surface = bc.root
+    #     bc.save_state()
     mp = Mempool()
-    node = Node()
-    asyncio.run(node.server_loop())
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+#GET Request Handling
+@app.get("/utxos")
+def serve_utxos(pks: str | None = None):
+    if pks:
+        query = bc.fetch_UTxOs_from_pks(pks)
+        queryb = pickle.dumps(query)
+        encoded_data = base64.b64encode(queryb)
+
+        return {"data": encoded_data}
+    
+    query = bc.fetch_UTxOs()
+    queryb = pickle.dumps(query)
+    encoded_data = base64.b64encode(queryb)
+
+    return {"data": encoded_data}
+
+@app.get("/mempool")
+def serve_mempool(): 
+    query = mp.get_pending()
+    queryb = pickle.dumps(query)
+    encoded_data = base64.b64encode(queryb)
+
+    return {"data": encoded_data}
+
+@app.get("/blocks")
+def serve_blocks(hash: str | None = None): 
+    if hash:
+        query = bc.fetch_block_from_hash(blockh=hash)
+        if not query:
+            raise HTTPException(status_code=404, detail="Block not found!")
+        queryb = pickle.dumps(query)
+        encoded_data = base64.b64encode(queryb)
+
+        return {"data": encoded_data}
+    
+    query = bc.fetch_blocks()
+    queryb = pickle.dumps(query)
+    encoded_data = base64.b64encode(queryb)
+
+    return {"data": encoded_data}
+
+@app.get("/chainstate")
+def serve_chainstate(): 
+    query = bc.fetch_chainstate()
+    queryb = pickle.dumps(query)
+    encoded_data = base64.b64encode(queryb)
+
+    return {"data": encoded_data}
+
+#Submission Handling
+@app.post("/submit-block")
+def handle_block_submission(payload: QueryPayload):
+    try:
+        blockb = base64.b64decode(payload.data)
+        block = pickle.loads(blockb)
+        status = bc.process_block(block)
+        if not status:
+            raise HTTPException(status_code=400, detail=f"Block Rejected!")
+        for tx in block.Tx_list: #Delete all associated tx from mempool
+            mp.del_tx(tx)
+        return {"status": "Block Accepted"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Block could not be added: {e}!")
+
+@app.post("/submit-tx")
+def handle_tx_submission(payload: QueryPayload):
+    try:
+        txb = base64.b64decode(payload.data)
+        tx = pickle.loads(txb)
+        if not verify_Tx(tx, blockless=True):
+            raise HTTPException(status_code=400, detail=f"Couldn't Verify Tx!")
+        mp.add_tx(tx)
+        return {"status": "Tx Accepted"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Tx could not be accepted: {e}!")
+
+

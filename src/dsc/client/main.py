@@ -79,14 +79,13 @@ class DsCoinClient(DsCoinUI):
   
     async def _update_inputs(self):
         self.setDisabled(True)
-        status, msg = await self.wh.update_inputs()
-        if not status and not msg:
-            self.display_error("You don't have any UTxOs!")
-        elif not status:
-            self.display_error(f"Couldn't fetch inputs: {msg}")
+        successful, status = await self.wh.update_inputs()
+        if not successful:
+            self.display_error(f"Error fetching Inputs: {status}")
+            warn("[Client] Couldn't Update Inputs!")
         else:
             self.display_error()
-            info("[Client] Updated Inputs!")
+            success("[Client] Updated Inputs!")
         self.load_input_list()
         self.setDisabled(False)
     
@@ -95,16 +94,14 @@ class DsCoinClient(DsCoinUI):
 
     async def _update_mempool(self):
         self.setDisabled(True)
-        query, msg = await self.nc.fetch_mempool()
-        if query:
+        query, status = await self.nc.fetch_mempool()
+        if status==200:
             self.ch.load_pending(query)
-            info(f"Updated Mempool")
+            success(f"[Client] Updated Mempool")
             self.display_error_m()
-        elif not msg:
-            self.display_error_m(f"Mempool is currently all empty :)")
-            self.ch.load_pending([])
         else:
-            self.display_error_m(f"Couldn't fetch mempool: {msg}")
+            self.display_error_m(f"Error fetching Mempool: {status}")
+            warn("[Client] Couldn't Update Mempool!")
         self.load_mempool()
         self.setDisabled(False)
 
@@ -113,15 +110,14 @@ class DsCoinClient(DsCoinUI):
 
     async def _update_chainstate(self):
         self.setDisabled(True)
-        query, msg = await self.nc.fetch_chainstate()
-        if query:
+        query, status = await self.nc.fetch_chainstate()
+        if status==200:
             self.ch.load_chainstate(query)
-            info(f"Updated Chainstate")
+            success(f"[Client] Updated Chainstate")
             self.display_error_m()
-        elif not msg:
-            self.display_error_m(f"Chainstate is blank :O")
         else:
-            self.display_error_m(f"Couldn't fetch chainstate: {msg}")
+            self.display_error_m(f"Error fetching Chainstate: {status}")
+            warn("[Client] Couldn't Update Chainstate!")
         self.load_details()
         self.setDisabled(False)
   
@@ -130,15 +126,14 @@ class DsCoinClient(DsCoinUI):
 
     async def _update_blocks(self):
         self.setDisabled(True)
-        query, msg = await self.nc.fetch_blocks()
-        if query:
+        query, status = await self.nc.fetch_blocks()
+        if status==200:
             self.ch.load_blocks(query)
-            info(f"Updated Blocks")
+            success(f"[Client] Updated Blocks")
             self.display_error_m()
-        elif not msg:
-            self.display_error_m(f"No Blocks! Empty Chain?")
         else:
-            self.display_error_m(f"Couldn't fetch blocks: {msg}")
+            self.display_error_m(f"Error fetching Blocks: {status}")
+            warn("[Client] Couldn't Update Blocks!")
         self.load_blocks()
         self.setDisabled(False)
 
@@ -433,7 +428,6 @@ class DsCoinClient(DsCoinUI):
             
             parent_item: QTreeWidgetItem = self.search_chain_viewer(parenth)
             if not parent_item:
-                print("couldnt find parent")
                 continue
 
             itm = QTreeWidgetItem([block[0], str(block[2]), "X" if block[3] else ""] )
@@ -482,12 +476,12 @@ class DsCoinClient(DsCoinUI):
     async def submit_tx(self, tx):
         self.setDisabled(True)
         status, msg = await self.nc.submit_tx(tx)
-        if not status:
-            self.display_error(f"Error submitting Tx: {msg}")
-        else:
+        if status==200:
             self.display_error()
-        self.wh.del_all_outputs()
-        self.load_output_list()
+            self.wh.del_all_outputs()
+            self.load_output_list()
+        else:
+            self.display_error(f"Error submitting Tx: {msg}")
         self.setDisabled(False)
     
     def compile_block(self):
@@ -498,13 +492,13 @@ class DsCoinClient(DsCoinUI):
     async def submit_block(self, block):
         self.setDisabled(True)
         status, msg = await self.nc.submit_block(block)
-        if not status:
-            self.display_error_m(f"Error submitting block: {msg}")
-        else:
+        if status==200:
             self.display_error_m()
             self.active_block = None
             self.update_preview()
             self.mempool_viewer_refresh()
+        else:
+            self.display_error_m(f"Error submitting block: {msg}")
         self.setDisabled(False)
 
     #Utility Functions
@@ -652,7 +646,7 @@ def main():
     createKeypair()
 
     #Bootstrap Node
-    HOST, PORT =  ("localhost", 8000)
+    HOST, PORT =  ("http://127.0.0.1", 8000)
 
     app = QApplication()
     qdarktheme.setup_theme("dark", "sharp")
@@ -668,9 +662,8 @@ def main():
     asyncio.set_event_loop(loop)
     win = DsCoinClient(wh, ch, nc)
     win.show()
-    with loop:
-        QTimer.singleShot(0, win.update_chainstate) #Initial fetch and updates from Node
-        QTimer.singleShot(0, win.update_inputs)
+    with loop: 
+        QTimer.singleShot(0, win.update_inputs) #Initial fetch and updates from Node
         QTimer.singleShot(0, win.update_mempool)
         QTimer.singleShot(0, win.update_blocks)
         loop.run_forever()

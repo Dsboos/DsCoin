@@ -15,7 +15,7 @@ class BlockChain():
         
         #The Blockchain stores all its blocks and transactions in the blockchain database
         self.db_path = self.get_data_directory()/"blockchain.db"
-        self.conn = sqlite3.Connection(self.db_path)
+        self.conn = sqlite3.Connection(self.db_path, check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.init_db()  #Initialize the blockchain database
 
@@ -355,12 +355,20 @@ class BlockChain():
         for TxI in Tx.inputs:
             self.add_UTxO(TxI, (Tx if isinstance(TxI, TxO) else None), block)
     #Fetching Methods
-    def fetch_UTxOs(self, pks):
+    def fetch_UTxOs(self):
+        query = self.cursor.execute("SELECT * FROM UTxOs").fetchall()
+        return query
+    
+    def fetch_UTxOs_from_pks(self, pks):
         query = self.cursor.execute("SELECT * FROM UTxOs WHERE rcvr = ?", (pks,)).fetchall()
         return query
     
     def fetch_blocks(self):
         query = self.cursor.execute("SELECT * FROM blocks").fetchall()
+        return query
+    
+    def fetch_block_from_hash(self, blockh):
+        query = self.cursor.execute("SELECT * FROM blocks WHERE hash=?", (blockh,)).fetchall()
         return query
 
     def fetch_chainstate(self):

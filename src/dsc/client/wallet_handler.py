@@ -88,16 +88,14 @@ class WalletHandler():
         return query, msg
     
     async def update_inputs(self):
-        query, msg = await self.fetch_inputs()
-        if query:
+        query, status = await self.fetch_inputs()
+        if status==200:
             self.cursor.execute("DELETE FROM inputs")
             for row in query:
                 self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
                                     (self.active_pks, row[0], row[3], row[4], row[5]))
             return True, None
-        if msg:
-            return False, msg
-        return False, None
+        return False, status
     
     def get_inputs(self):
         query = self.cursor.execute("SELECT * FROM inputs WHERE pk = ?", (self.active_pks,)).fetchall()
