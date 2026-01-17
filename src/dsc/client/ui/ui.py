@@ -12,7 +12,6 @@ import sys
 class DsCoinUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DsCoin Client v0.1.0")
         self.setWindowIcon(QIcon("src\\dsc\\client\\ui\\assets\\icons\\logo.png"))
         self.resize(1080, 720)
         self.setMinimumSize(920, 600)

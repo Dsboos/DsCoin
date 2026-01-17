@@ -17,7 +17,12 @@ class NodeClient():
     #Fetching Methods
     async def fetch_utxos(self, pks):
         info2("[Node Client] utxos fetch request initiated...")
-        response = requests.get(url=f"{self.host}:{self.port}/utxos", params={"pks": pks})
+        try:
+            response = requests.get(url=f"{self.host}:{self.port}/utxos", params={"pks": pks})
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         query_payload = response.json()
         queryb = base64.b64decode(query_payload["data"])
         query = pickle.loads(queryb)
@@ -25,7 +30,12 @@ class NodeClient():
     
     async def fetch_mempool(self):
         info2("[Node Client] mempool fetch request initiated...")
-        response = requests.get(url=f"{self.host}:{self.port}/mempool")
+        try:
+            response = requests.get(url=f"{self.host}:{self.port}/mempool")
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         query_payload = response.json()
         queryb = base64.b64decode(query_payload["data"])
         query = pickle.loads(queryb)
@@ -33,7 +43,12 @@ class NodeClient():
     
     async def fetch_blocks(self):
         info2("[Node Client] blocks fetch request initiated...")
-        response = requests.get(url=f"{self.host}:{self.port}/blocks")
+        try:
+            response = requests.get(url=f"{self.host}:{self.port}/blocks")
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         query_payload = response.json()
         queryb = base64.b64decode(query_payload["data"])
         query = pickle.loads(queryb)
@@ -41,7 +56,12 @@ class NodeClient():
     
     async def fetch_chainstate(self):
         info2("[Node Client] chainstate fetch request initiated...")
-        response = requests.get(url=f"{self.host}:{self.port}/chainstate")
+        try:
+            response = requests.get(url=f"{self.host}:{self.port}/chainstate")
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         query_payload = response.json()
         queryb = base64.b64decode(query_payload["data"])
         query = pickle.loads(queryb)
@@ -53,7 +73,12 @@ class NodeClient():
         blockb = pickle.dumps(block)
         encoded_data = base64.b64encode(blockb).decode("utf-8")
         payload = {"data": encoded_data}
-        response = requests.post(url=f"{self.host}:{self.port}/submit-block", json=payload)
+        try:
+            response = requests.post(url=f"{self.host}:{self.port}/submit-block", json=payload)
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         return response.status_code, response.reason
     
     async def submit_tx(self, tx):
@@ -61,5 +86,10 @@ class NodeClient():
         txb = pickle.dumps(tx)
         encoded_data = base64.b64encode(txb).decode("utf-8")
         payload = {"data": encoded_data}
-        response = requests.post(url=f"{self.host}:{self.port}/submit-tx", json=payload)
+        try:
+            response = requests.post(url=f"{self.host}:{self.port}/submit-tx", json=payload)
+        except requests.ConnectionError:
+            return None, "Connection Error"
+        except requests.RequestException as e:
+            return None, "Request Error"
         return response.status_code, response.reason

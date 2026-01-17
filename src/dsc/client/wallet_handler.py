@@ -84,8 +84,8 @@ class WalletHandler():
     
     async def fetch_inputs(self):
         #Fetch and return all UTxOs belonging to the user from blockchain.db
-        query, msg = await self.nc.fetch_utxos(self.active_pks)
-        return query, msg
+        query, status = await self.nc.fetch_utxos(self.active_pks)
+        return query, status
     
     async def update_inputs(self):
         query, status = await self.fetch_inputs()
@@ -94,6 +94,7 @@ class WalletHandler():
             for row in query:
                 self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
                                     (self.active_pks, row[0], row[3], row[4], row[5]))
+            self.conn.commit()
             return True, None
         return False, status
     
@@ -156,10 +157,10 @@ class WalletHandler():
             return False, "Private key don't match the public key dawg :O"
         if self.cursor.execute("SELECT * FROM wallets WHERE pk= ?", (user_pks,)).fetchall():
             return False, "You already have that wallet added, my love <3"
-        self.cursor.execute("INSERT OR IGNORE INTO wallets VALUES (?, ?, ?)", (user_pks, user_sks, name if name else "Unnamed Wallet"))
+        self.cursor.execute("INSERT OR IGNORE INTO wallets VALUES (?, ?, ?)", (user_pk.to_string().hex(), user_sk.to_string().hex(), name if name else "Unnamed Wallet"))
         self.active_pk = user_pk
-        self.active_pks = user_pks
-        self.active_sks = user_sks
+        self.active_pks = user_pk.to_string().hex() #Notice how we don't use user_pks or user_sks directly. This is because I had discovered that sometimes keys in hex string formats have prefixes that get stripped by ecdsa, causing mismatches in my databases.
+        self.active_sks = user_sk.to_string().hex()
         self.active_sk = user_sk
         self.conn.commit()
         return True, None

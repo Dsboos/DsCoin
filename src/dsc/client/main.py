@@ -15,10 +15,12 @@ import qdarktheme
 #Other imports
 import random, pickle, ecdsa, asyncio
 
+VERSION = "v0.2.0-alpha"
 
 class DsCoinClient(DsCoinUI):
     def __init__(self, wh: WalletHandler, ch: ChainHandler, nc: NodeClient):
         super().__init__()
+        self.setWindowTitle(f"DsCoin Client {VERSION}")
 
         #Button Cooldowns
         #Submit cooldown

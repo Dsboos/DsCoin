@@ -433,10 +433,12 @@ FodyWeavers.xsd
 build/
 dist/
 *.egg-info/
+*.spec
 
 # SQLite databases
 *.db
 *.sqlite
 *.sqlite3
+
 
 data/

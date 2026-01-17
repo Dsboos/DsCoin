@@ -7,7 +7,7 @@ class ChainHandler():
         self.init_db()
 
     def init_db(self):
-        self.conn = sqlite3.connect(self.get_data_directory()/"mempool.db")
+        self.conn = sqlite3.connect(self.get_data_directory()/"client.db")
         self.cursor = self.conn.cursor()
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS pending (
                             obj BLOB,
