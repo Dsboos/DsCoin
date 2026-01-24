@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QDialog, QLineEdit, QPlainTextEdit, QPushButton, 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 import qdarktheme
-from dsc.client.wallet_handler import WalletHandler
+from dsc.client.client_handler import ClientHandler
 
 
 class DsCoinLogin(QDialog):
@@ -196,8 +196,8 @@ class styleSheets:
 
 if __name__ in "__main__":
     app = QApplication()
-    wh = WalletHandler()
+    ch = ClientHandler()
     qdarktheme.setup_theme("dark", "rounded")
-    win = DsCoinLogin(wh)
+    win = DsCoinLogin(ch)
     win.show()
     app.exec()

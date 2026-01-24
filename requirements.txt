@@ -2,3 +2,5 @@ ecdsa
 qasync
 PySide6
 pyqtdarktheme
+pydantic
+fastapi

@@ -1,6 +1,6 @@
 from dsc.common.prettyprint import warn, fail, info, success, info2, warn2
 from pydantic import BaseModel
-import pickle, requests, asyncio, base64
+import pickle, requests, base64
 
 
 class QueryPayload(BaseModel):

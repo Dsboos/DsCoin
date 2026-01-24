@@ -1,6 +1,6 @@
 [project]
 name = "dsc"
-version = "0.1.0"
+version = "0.2.1a"
 description = "A cryptocoin implementation called DsCoin"
 requires-python = ">=3.10"
 
@@ -8,7 +8,9 @@ dependencies = [
     "ecdsa",
     "qasync",
     "PySide6",
-    "qdarktheme"
+    "pyqtdarktheme",
+    "pydantic",
+    "fastapi"
 ]
 [build-system]
 requires = ["setuptools"]

@@ -1,14 +1,12 @@
-from dsc.common.transactions import TxO
-from dsc.common.prettyprint import warn, fail, success, info
+from dsc.common.transactions import TxO, Tx
+from dsc.common.prettyprint import warn, info, fail, success
 from dsc.client.node_client import NodeClient
+import sqlite3, sys, pickle, asyncio, ecdsa
 from pathlib import Path
-import asyncio
-import pickle
-import sqlite3
-import ecdsa
-import sys
 
-#This module handles the client's wallets and their functionalities
+db_lock = asyncio.Lock()
+
+#This class handles the client's wallets and their functionalities
 #The wallet id is synonymous with user key
 class WalletHandler():
     def __init__(self, nc: NodeClient):
@@ -90,11 +88,12 @@ class WalletHandler():
     async def update_inputs(self):
         query, status = await self.fetch_inputs()
         if status==200:
-            self.cursor.execute("DELETE FROM inputs")
-            for row in query:
-                self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
-                                    (self.active_pks, row[0], row[3], row[4], row[5]))
-            self.conn.commit()
+            async with db_lock:
+                self.cursor.execute("DELETE FROM inputs")
+                for row in query:
+                    self.cursor.execute("INSERT INTO inputs VALUES (?, ?, ?, ?, ?)",
+                                        (self.active_pks, row[0], row[3], row[4], row[5]))
+                self.conn.commit()
             return True, None
         return False, status
     
@@ -138,8 +137,6 @@ class WalletHandler():
             #Insert TxO into the table
             self.cursor.execute("INSERT INTO outputs VALUES (?, ?, ?, ?, ?, ?)", 
                                 (self.active_pks, name, TXO.rcvr.to_string().hex(), TXO.hash, amt, TXO_bytes))
-            
-            #Commit changes
             self.conn.commit()
             return True, None
         except Exception as e:
@@ -157,12 +154,13 @@ class WalletHandler():
             return False, "Private key don't match the public key dawg :O"
         if self.cursor.execute("SELECT * FROM wallets WHERE pk= ?", (user_pks,)).fetchall():
             return False, "You already have that wallet added, my love <3"
+
         self.cursor.execute("INSERT OR IGNORE INTO wallets VALUES (?, ?, ?)", (user_pk.to_string().hex(), user_sk.to_string().hex(), name if name else "Unnamed Wallet"))
+        self.conn.commit()
         self.active_pk = user_pk
         self.active_pks = user_pk.to_string().hex() #Notice how we don't use user_pks or user_sks directly. This is because I had discovered that sometimes keys in hex string formats have prefixes that get stripped by ecdsa, causing mismatches in my databases.
         self.active_sks = user_sk.to_string().hex()
         self.active_sk = user_sk
-        self.conn.commit()
         return True, None
     
     #Deletion Functions
@@ -212,8 +210,82 @@ class WalletHandler():
         data_directory.mkdir(parents=True, exist_ok=True)
         return data_directory
     
+#This class handles everythin other than the wallet
+class ClientHandler(WalletHandler):
+    def __init__(self, nc):
+        super().__init__(nc=nc)
+        self.init_db()
+
+    def init_db(self):
+        self.conn = sqlite3.connect(self.get_data_directory()/"client.db")
+        self.cursor = self.conn.cursor()
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS pending (
+                            obj BLOB,
+                            tx_hash TEXT PRIMARY KEY,
+                            fee REAL
+                            )""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS blockchain(
+                            name TEXT,
+                            height INTEGER,
+                            rooth TEXT PRIMARY KEY,
+                            root BLOB,
+                            surface BLOB,
+                            difficulty INTEGER,
+                            tx_limit INTEGER,
+                            mine_reward INTEGER
+                            )""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS blocks (
+                            hash TEXT PRIMARY KEY,
+                            prevh TEXT,
+                            height INTEGER,
+                            main_chain BOOLEAN,
+                            obj BLOB
+                            )                           
+                            """)
+        self.conn.commit()
     
+    def get_blocks(self):
+        query = self.cursor.execute("SELECT * FROM blocks").fetchall()
+        return query
+    
+    def get_block_from_hash(self, blockh):
+        query = self.cursor.execute("SELECT * FROM blocks WHERE hash = ?", (blockh,)).fetchone()
+        return query
+    
+    def load_blocks(self, query):
+        self.cursor.execute("DELETE FROM blocks")
+        for block in query:
+            self.cursor.execute("INSERT INTO blocks VALUES (?, ?, ?, ?, ?)", block)
+                            
+    def get_pending(self):
+        query = self.cursor.execute("SELECT * FROM pending").fetchall()
+        return query
+    
+    def get_tx_from_hash(self, hash):
+        query = self.cursor.execute("SELECT * FROM pending WHERE tx_hash = ?", (hash,)).fetchone()
+        return query
+    
+    def load_pending(self, query):
+        self.cursor.execute("DELETE FROM pending")
+        for tx in query:
+            self.cursor.execute("INSERT INTO pending VALUES(?, ?, ?)", tx)
+    
+    def get_chainstate(self):
+        query = self.cursor.execute("SELECT * FROM blockchain").fetchone()
+        return query
+    
+    def load_chainstate(self, query):
+        self.cursor.execute("DELETE FROM blockchain")
+        self.cursor.execute("INSERT INTO blockchain VALUES (?, ?, ?, ?, ?, ?, ?, ?)", query)
 
+    def get_data_directory(self):
+        if getattr(sys, "frozen", False):
+            root = Path(sys.executable).resolve().parent
+        else:
+            root = Path(__file__).resolve().parent
+        data_directory = root / "data"
+        data_directory.mkdir(parents=True, exist_ok=True)
+        return data_directory
+    
 if __name__ == "__main__":
-    wh = WalletHandler()
-
+    pass

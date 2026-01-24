@@ -2,23 +2,23 @@
 from dsc.common.prettyprint import warn, fail, success, info
 from dsc.common.transactions import TxO, Tx
 from dsc.common.blocks import Block, CBTx
-from dsc.client.wallet_handler import WalletHandler
-from dsc.client.chain_handler import ChainHandler
+from dsc.client.client_handler import ClientHandler 
 from dsc.client.node_client import NodeClient
 from dsc.client.login import DsCoinLogin
 from dsc.client.ui.ui import DsCoinUI, CreateBlockUI, SwitchNodeUI
 #PySide6 imports
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem, QTreeWidgetItem, QDialog
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QIcon
 from qasync import QEventLoop
 import qdarktheme
 #Other imports
-import random, pickle, ecdsa, asyncio
+import random, pickle, ecdsa, asyncio, os, sys
 
-VERSION = "v0.2.0-alpha"
+VERSION = "v0.2.1-alpha"
 
 class DsCoinClient(DsCoinUI):
-    def __init__(self, wh: WalletHandler, ch: ChainHandler, nc: NodeClient):
+    def __init__(self, ch: ClientHandler, nc: NodeClient):
         super().__init__()
         self.setWindowTitle(f"DsCoin Client {VERSION}")
 
@@ -61,7 +61,6 @@ class DsCoinClient(DsCoinUI):
         self.batch_size = 1000
 
         #Handlers
-        self.wh = wh
         self.ch = ch
         self.nc = nc
 
@@ -81,7 +80,7 @@ class DsCoinClient(DsCoinUI):
   
     async def _update_inputs(self):
         self.setDisabled(True)
-        successful, status = await self.wh.update_inputs()
+        successful, status = await self.ch.update_inputs()
         if not successful:
             self.display_error(f"Error fetching Inputs: {status}")
             warn("[Client] Couldn't Update Inputs!")
@@ -249,7 +248,7 @@ class DsCoinClient(DsCoinUI):
         name = self.tx_name_field.text().strip()
         pk2 = self.pk2_field.toPlainText().strip().replace("\n", "")
         amt = self.amt_field.value()
-        res, msg = self.wh.add_output(pk2, amt, name)
+        res, msg = self.ch.add_output(pk2, amt, name)
         if not res:
             self.display_error(msg)
             return
@@ -259,7 +258,7 @@ class DsCoinClient(DsCoinUI):
         remainder = self.input_total - self.output_total
         if remainder > 0:
             self.tx_name_field.setText("Remainder Amount")
-            self.pk2_field.setPlainText(self.wh.active_pks)
+            self.pk2_field.setPlainText(self.ch.active_pks)
             self.amt_field.setValue(remainder)
         else:
             self.display_error("Remainder is less than or equal to Zero!")
@@ -278,7 +277,7 @@ class DsCoinClient(DsCoinUI):
         if not prev:
             self.display_error_m("Block not created: Need Previous Block's address!")
             return
-        self.active_block = Block(prev, self.wh.active_pk, reward, limit, diff)
+        self.active_block = Block(prev, self.ch.active_pk, reward, limit, diff)
         self.active_block.add_CBTx(CBTx(self.active_block.miner, self.active_block.mine_reward, type="reward")) #Add the miner's reward
         if name:
             self.active_block.name = name
@@ -334,7 +333,7 @@ class DsCoinClient(DsCoinUI):
         selected_rows =  { index.row() for index in self.output_tx_list.selectedIndexes() }
         for row in selected_rows:
             o_hash = self.output_tx_list.model().index(row, 2).data()
-            self.wh.del_output(o_hash)
+            self.ch.del_output(o_hash)
         self.load_output_list()
 
     def clear_output_form(self):
@@ -356,7 +355,7 @@ class DsCoinClient(DsCoinUI):
     def load_output_list(self):
         self.output_tx_list.clearContents()
         self.output_tx_list.setRowCount(0)
-        outputs = self.wh.get_outputs()
+        outputs = self.ch.get_outputs()
         row = 0
         for output in outputs:
             self.output_tx_list.insertRow(row)
@@ -371,7 +370,7 @@ class DsCoinClient(DsCoinUI):
         self.input_tx_list.blockSignals(True)
         self.input_tx_list.clearContents()
         self.input_tx_list.setRowCount(0)
-        inputs = self.wh.get_inputs()
+        inputs = self.ch.get_inputs()
         row = 0
         for input in inputs:
             self.input_tx_list.insertRow(row)
@@ -451,18 +450,18 @@ class DsCoinClient(DsCoinUI):
             self.display_error("Cannot submit Tx with negative remainder!")
             self.sign_btn.setEnabled(True)
             return
-        tx = Tx(self.wh.active_pk)
+        tx = Tx(self.ch.active_pk)
         #Add all selected inputs to Tx
         for row in range(self.input_tx_list.rowCount()):
             if self.input_tx_list.item(row, 2).checkState() != Qt.CheckState.Checked:
                 continue
             txih = self.input_tx_list.item(row, 0).text()
-            txib = self.wh.get_input_from_hash(txih)[4]
+            txib = self.ch.get_input_from_hash(txih)[4]
             tx.add_input(pickle.loads(txib))
         #Add all outputs to Tx
         for row in range(self.output_tx_list.rowCount()):
             txoh = self.output_tx_list.item(row, 2).text()
-            txob = self.wh.get_output_from_hash(txoh)[5]
+            txob = self.ch.get_output_from_hash(txoh)[5]
             tx.add_output(pickle.loads(txob))
         if self.output_tx_list.rowCount() == 0:
             reply = QMessageBox.warning(self, "No Outputs", 
@@ -471,7 +470,7 @@ class DsCoinClient(DsCoinUI):
             if reply == QMessageBox.StandardButton.No:
                 self.sign_btn.setEnabled(True)
                 return
-        tx.sign(self.wh.active_sk)
+        tx.sign(self.ch.active_sk)
         asyncio.create_task(self.submit_tx(tx))
         self.submission_cooldown.start(self.submission_cooldown_dur)
 
@@ -480,7 +479,7 @@ class DsCoinClient(DsCoinUI):
         status, msg = await self.nc.submit_tx(tx)
         if status==200:
             self.display_error()
-            self.wh.del_all_outputs()
+            self.ch.del_all_outputs()
             self.load_output_list()
         else:
             self.display_error(f"Error submitting Tx: {msg}")
@@ -506,7 +505,7 @@ class DsCoinClient(DsCoinUI):
     #Utility Functions
     def change_wallet(self):
         self.setDisabled(True)
-        login = DsCoinLogin(self.wh)     
+        login = DsCoinLogin(self.ch)     
         if login.exec() != QDialog.DialogCode.Accepted:
             self.setDisabled(False)
             return
@@ -651,18 +650,19 @@ def main():
     HOST, PORT =  ("http://127.0.0.1", 8000)
 
     app = QApplication()
-    qdarktheme.setup_theme("dark", "sharp")
+    app.setWindowIcon(QIcon("src\\dsc\\client\\ui\\assets\\icons\\logo.ico"))
 
+    qdarktheme.setup_theme("dark", "sharp")
+    
     nc = NodeClient(HOST, PORT)
-    wh = WalletHandler(nc)
-    ch = ChainHandler()
-    login = DsCoinLogin(wh)
+    ch = ClientHandler(nc)
+    login = DsCoinLogin(ch)
     if login.exec() != QDialog.DialogCode.Accepted:
         return
-        
+     
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-    win = DsCoinClient(wh, ch, nc)
+    win = DsCoinClient(ch, nc)
     win.show()
     with loop: 
         QTimer.singleShot(0, win.update_inputs) #Initial fetch and updates from Node
