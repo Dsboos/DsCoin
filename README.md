@@ -1,3 +1,10 @@
+# **DsCoin**
+
+DsCoin is a **fictitious cryptocurrency coin** that works on blockchain technology and its principles. It functions through a rudimentary Node-Client system, where Nodes host copies of the blockchain and deal with block additions.\
+Apart from that, Nodes also handle chain reorganizations, fork handling and update requests.\
+The Client deals with the user-side of the coin, handling transaction creations, block mining, and chain viewing.\
+Mirroring BitCoin, DsCoin is designed as a **decentralized** blockchain, and provides the user with the ability to switch Nodes. This README contains extensive documentation about the Client's features, and a behind-the-scenes view of the Node's logic.
+
 # **DsCoin Client**
 
 The client is a UI-based application that handles the following activities:
@@ -468,6 +475,23 @@ None
 **3. Authorized Rewarding:** Whether or not the `CBTx`'s in the block that are labelled as rewards do not exceed the miner reward specified (passed to the function as a parameter).
 
 > In addition the above, the function also calls the `verify_Tx()` method on every `Tx` in the block to verify them.
+
+# 3. Blockchain
+
+## CLASS: `Blockchain()`
+
+> This is the motherload, the backbone of this entire project. This mega-class handles nearly the entirety of the blockchain's logic, from verifications, additions to reorgs and fork handling.
+
+### Parameters:
+
+1. `root`: The first block, the root of the blockchain where all new blocks stem from. It can contain any transactions, but it MUST be mined. _(default = None)_
+2. `difficulty`: The difficulty of the hash that is to be obtained through mining. It corresponds to the number of zeroes the block's hash must lead with _(default = 3)_
+3. `tx_limit`: `Tx_limit`: The amount of Tx's a block may add to itself _(default = 5)_
+4. `reward`: The reward amount that the block will add to itself in the miner's name _(default = 64)_
+5. `name`: Name of the `Blockchain` _(default = "unnamed_blockchain")_
+6. `chain_password`: The password required to submit `CBTx` containing blocks to the chain. _(default = None)_
+
+### Methods: WIP
 
 # To-do list:
 

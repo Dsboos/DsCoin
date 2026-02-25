@@ -440,5 +440,5 @@ dist/
 *.sqlite
 *.sqlite3
 
-
+DsCoin.code-workspace
 data/
