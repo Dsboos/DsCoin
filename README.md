@@ -491,7 +491,57 @@ None
 5. `name`: Name of the `Blockchain` _(default = "unnamed_blockchain")_
 6. `chain_password`: The password required to submit `CBTx` containing blocks to the chain. _(default = None)_
 
-### Methods: WIP
+### Methods:
+
+1. `.process_block( block )`: Processes a block, and if it passes all verifications, adds it to the chain. Returns `True` or `False` based on block acceptance.
+2. `.save_snapshot()`: Saves a snapshot of the current state of the chain, and stores it in the db.
+
+### Block Submission Handling
+
+> One of the most powerful abilities of a blockchain is to independently accept or reject blocks based on self-run checks.
+> When a block is submitted to the chain (which is hosted on a node), the following checks occur:
+
+**1. UTxO Verification:** An intense verification occurs to verify if all UTxOs that are used in the block's transactions are valid and unspent. Depending on whether the block is part of a fork or the main chain, a simulation may need to occur to check if the UTxOs still pass the verifications.
+
+**2. Block Details:** Checks are done to ensure that the block complies with the chain's specifications. This includes matching mining difficulties, Tx limits, miner rewards and others. The block must also be mined as per the required difficulty.
+
+**3. Target Block:** The chain checks if the target block, that the submission is attempting to attach to, exists or not. If a block is attaching to a fork, it handles the necessary procedures required in case the fork now surpasses the main chain.
+
+### UTxO Handling
+
+> UTxO handling is an integral part of the blockchain logic. A lot of checks happen behind the scenes whenever a new block is submitted to the chain, in order to verify its validity. UTxO handling prevents double spending and transaction frauds.
+> When a block is submitted, and it requests to attach to the blockchain's surface (the top most block), it undergoes the following checks:
+
+**1. UTxO Table Check:** All the UTxOs in the block's transactions are checked against the latest UTxO table to ensure that they exist.
+
+**2. Double Spend:** Checks if any UTxO is being called twice in the same block.
+
+> When a `Block` is submitted, and it requests to attach to a fork, it undergoes the following extra steps:
+
+1. The snapshots table is searched to find the snapshot closest to the fork's common anscestor with the main-chain. The snapshot with the surface `Block` that is the nearest to the fork's common anscestor, but never higher, is chosen.
+
+2. A path is created from the fork head to the snapshot surface `Block`, by traversing backwards.
+
+3. The snapshot's UTxO table is loaded and a pointer travels forwards across the fork path, and sequentially builds the UTxO table appropriately. It does this by simulating `Block` additions to add or remove UTxOs from the table, till the fork's head is reached.
+
+4. Then, the submission goes through a standard UTxO verification against the simulated table.
+
+> Finally, once a `Block` is accepted, all the UTxOs that were used in it must be removed from the UTxO table.
+
+### Fork Handling
+
+> Forks will inevitably form in a blockchain, either as a result of multiple submissions trying to attach to the same `Block`, or due to public consensus favoring another branch of blocks.
+> Although mining prevents (or drastically reduces the chance of) multiple submissions to the chain surface at the same time, the chain must nevertheless have the ability to handle these situations as the fork submissions may not necessarily be invalid.
+> When a submission requests to attach to a non-main-chain `Block`, the following checks occur:
+
+1. Does the target `Block` exist? (If very old forks get deleted, the target `Block` may not exist)
+2. Does the `Block` addition cause the fork to grow longer than the main-chain? If yes, trigger a chain reorganization.
+
+> A chain reorganization happens in three steps. First, two paths are traversed and made: one from the new block to the common anscestor (`new_path`) and one from the surface to the common anscestor (`old_path`).
+> Then, All of the blocks in the `old_path` are traversed and their spent UTxOs are re-added to the UTxO table, and all the output TxOs are set to unconfirmed in the TxO table.
+> Once the pointer reaches the common anscestor, and UTxO table resembles what the common anscestor
+> s table would look like, the pointer begins traversing forwards through the `new_path`
+> As it travels, it builds the UTxO table, adding and removing UTxOs as it travels along. It also sets all the formerly unconfirmed transactions from this fork to confirmed and marks the blocks as `main_chain` = `True`.
 
 # To-do list:
 
